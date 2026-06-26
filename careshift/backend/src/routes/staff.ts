@@ -97,9 +97,9 @@ router.get('/', authenticate, authorize('ADMIN'), async (req: Request, res: Resp
   ]);
 
   // Attach group info via manual join
-  const userIds = users.map(u => u.id);
+  const fetchedUserIds = users.map(u => u.id);
   const userGroupLinks = await prisma.userGroup.findMany({
-    where: { userId: { in: userIds } },
+    where: { userId: { in: fetchedUserIds } },
   });
   const groupData = await prisma.group.findMany({
     where: { id: { in: userGroupLinks.map(ug => ug.groupId) } },
