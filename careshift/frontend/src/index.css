@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans bg-background text-text;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-hover text-white font-bold py-2.5 px-5 rounded-lg transition-colors duration-200 text-btn;
+  }
+
+  .btn-secondary {
+    @apply bg-white hover:bg-gray-50 text-text font-bold py-2.5 px-5 rounded-lg border border-border transition-colors duration-200 text-btn;
+  }
+
+  .btn-danger {
+    @apply bg-danger hover:bg-red-600 text-white font-bold py-2.5 px-5 rounded-lg transition-colors duration-200 text-btn;
+  }
+
+  .card {
+    @apply bg-card rounded-xl border border-border p-6 shadow-sm;
+  }
+
+  .form-input {
+    @apply w-full border border-border rounded-lg px-3 py-2.5 text-body focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all;
+  }
+
+  .form-label {
+    @apply block text-sub font-medium text-text mb-1;
+  }
+}

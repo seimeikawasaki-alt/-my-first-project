@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String    @id @default(uuid())
+  userCode         String    @unique
+  passwordHash     String
+  role             String    @default("STAFF")
+  lastName         String
+  firstName        String
+  lastNameKana     String?
+  firstNameKana    String?
+  employmentType   String
+  hourlyWage       Decimal?
+  monthlySalary    Decimal?
+  email            String?
+  phone            String?
+  hireDate         DateTime?
+  isActive         Boolean   @default(true)
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  color       String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model UserGroup {
+  userId   String
+  groupId  String
+  isLeader Boolean @default(false)
+
+  @@id([userId, groupId])
+}
+
+model ShiftType {
+  id           String  @id @default(uuid())
+  name         String
+  startTime    String
+  endTime      String
+  breakMinutes Int     @default(60)
+  color        String?
+  isOvernight  Boolean @default(false)
+  isActive     Boolean @default(true)
+}
+
+model Shift {
+  id          String   @id @default(uuid())
+  userId      String
+  shiftTypeId String?
+  shiftDate   DateTime
+  startTime   String?
+  endTime     String?
+  status      String   @default("DRAFT")
+  notes       String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Attendance {
+  id               String    @id @default(uuid())
+  userId           String
+  workDate         DateTime
+  punchIn          DateTime?
+  punchOut         DateTime?
+  breakStart       DateTime?
+  breakEnd         DateTime?
+  status           String?
+  workMinutes      Int?
+  overtimeMinutes  Int       @default(0)
+  lateNightMinutes Int       @default(0)
+  isHolidayWork    Boolean   @default(false)
+  notes            String?
+  modifiedBy       String?
+  modifyReason     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model SalaryItem {
+  id          String   @id @default(uuid())
+  name        String
+  itemType    String
+  calcType    String
+  calcFormula String?
+  isDefault   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model Payroll {
+  id             String    @id @default(uuid())
+  userId         String
+  year           Int
+  month          Int
+  status         String    @default("DRAFT")
+  totalIncome    Decimal   @default(0)
+  totalDeduction Decimal   @default(0)
+  netPay         Decimal   @default(0)
+  confirmedAt    DateTime?
+  confirmedBy    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, year, month])
+}
+
+model PayrollDetail {
+  id           String  @id @default(uuid())
+  payrollId    String
+  salaryItemId String
+  amount       Decimal @default(0)
+  notes        String?
+  sortOrder    Int     @default(0)
+}
+
+model ShiftRequest {
+  id            String    @id @default(uuid())
+  userId        String
+  shiftId       String?
+  requestType   String
+  requestedDate DateTime?
+  reason        String?
+  status        String    @default("PENDING")
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+}
