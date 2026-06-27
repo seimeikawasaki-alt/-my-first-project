@@ -1,5 +1,9 @@
 export type UserRole = 'ADMIN' | 'GROUP_LEADER' | 'STAFF';
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT';
+export type ShiftStatus = 'DRAFT' | 'PUBLISHED';
+export type AttendanceStatus = 'PUNCHED_IN' | 'ON_BREAK' | 'PUNCHED_OUT' | 'ABSENT' | 'PAID_LEAVE' | 'HOLIDAY_WORK';
+export type ShiftRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type ShiftRequestType = 'CHANGE' | 'CANCEL' | 'ADD';
 
 export interface User {
   id: string;
@@ -46,6 +50,78 @@ export interface GroupMember {
   firstName: string;
   employmentType: EmploymentType;
   isLeader: boolean;
+}
+
+export interface ShiftType {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  breakMinutes: number;
+  color?: string | null;
+  isOvernight: boolean;
+  isActive: boolean;
+}
+
+export interface Shift {
+  id: string;
+  userId: string;
+  shiftTypeId?: string | null;
+  shiftDate: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  status: ShiftStatus;
+  notes?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user?: { lastName: string; firstName: string };
+  shiftType?: ShiftType | null;
+}
+
+export interface Attendance {
+  id: string;
+  userId: string;
+  workDate: string;
+  punchIn?: string | null;
+  punchOut?: string | null;
+  breakStart?: string | null;
+  breakEnd?: string | null;
+  status?: AttendanceStatus | null;
+  workMinutes?: number | null;
+  overtimeMinutes: number;
+  lateNightMinutes: number;
+  isHolidayWork: boolean;
+  notes?: string | null;
+  modifiedBy?: string | null;
+  modifyReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user?: { lastName: string; firstName: string };
+}
+
+export interface AttendanceSummary {
+  userId: string;
+  lastName: string;
+  firstName: string;
+  totalWorkMinutes: number;
+  totalOvertimeMinutes: number;
+  absentDays: number;
+  paidLeaveDays: number;
+}
+
+export interface ShiftRequest {
+  id: string;
+  userId: string;
+  shiftId?: string | null;
+  requestType: ShiftRequestType;
+  requestedDate?: string | null;
+  reason?: string | null;
+  status: ShiftRequestStatus;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  user?: { lastName: string; firstName: string };
 }
 
 export interface ApiResponse<T> {

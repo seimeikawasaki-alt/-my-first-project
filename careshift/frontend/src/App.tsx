@@ -3,13 +3,22 @@ import { useEffect } from 'react';
 import { useAuthStore } from './stores/authStore';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import AdminLayout from './components/layout/AdminLayout';
+import StaffLayout from './components/layout/StaffLayout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/admin/DashboardPage';
 import StaffListPage from './pages/admin/StaffListPage';
 import StaffFormPage from './pages/admin/StaffFormPage';
 import GroupsPage from './pages/admin/GroupsPage';
 import PlaceholderPage from './pages/admin/PlaceholderPage';
+import SettingsPage from './pages/admin/SettingsPage';
+import ShiftsPage from './pages/admin/ShiftsPage';
+import AttendancePage from './pages/admin/AttendancePage';
 import StaffDashboardPage from './pages/staff/StaffDashboardPage';
+import PunchPage from './pages/staff/PunchPage';
+import MyShiftsPage from './pages/staff/MyShiftsPage';
+import MyAttendancePage from './pages/staff/MyAttendancePage';
+import ShiftRequestPage from './pages/staff/ShiftRequestPage';
+import ProfilePage from './pages/staff/ProfilePage';
 
 function RequireAuth({ children, requiredRole }: {
   children: React.ReactNode;
@@ -35,6 +44,10 @@ function RequireAuth({ children, requiredRole }: {
 
   return <>{children}</>;
 }
+
+const now = new Date();
+const currYear = now.getFullYear();
+const currMonth = String(now.getMonth() + 1).padStart(2, '0');
 
 export default function App() {
   const { fetchMe, isLoading } = useAuthStore();
@@ -70,14 +83,9 @@ export default function App() {
           <Route path="staff" element={<StaffListPage />} />
           <Route path="staff/:id" element={<StaffFormPage />} />
           <Route path="groups" element={<GroupsPage />} />
-          <Route
-            path="shifts/:year/:month"
-            element={<PlaceholderPage title="シフト管理" phase="Phase 2" />}
-          />
-          <Route
-            path="attendance/:year/:month"
-            element={<PlaceholderPage title="勤怠管理" phase="Phase 2" />}
-          />
+          <Route path="shifts/:year/:month" element={<ShiftsPage />} />
+          <Route path="attendance/:year/:month" element={<AttendancePage />} />
+          <Route path="settings" element={<SettingsPage />} />
           <Route
             path="salary/:year/:month"
             element={<PlaceholderPage title="給与計算" phase="Phase 3" />}
@@ -90,29 +98,26 @@ export default function App() {
             path="salary/payslips"
             element={<PlaceholderPage title="給与明細一覧" phase="Phase 3" />}
           />
-          <Route
-            path="settings"
-            element={<PlaceholderPage title="システム設定" phase="Phase 2" />}
-          />
         </Route>
 
-        {/* Staff routes */}
+        {/* Staff routes with bottom nav layout */}
         <Route
-          path="/staff/dashboard"
+          path="/staff"
           element={
             <RequireAuth>
-              <StaffDashboardPage />
+              <StaffLayout />
             </RequireAuth>
           }
-        />
-        <Route
-          path="/staff/*"
-          element={
-            <RequireAuth>
-              <StaffDashboardPage />
-            </RequireAuth>
-          }
-        />
+        >
+          <Route index element={<Navigate to="/staff/dashboard" replace />} />
+          <Route path="dashboard" element={<StaffDashboardPage />} />
+          <Route path="punch" element={<PunchPage />} />
+          <Route path="shifts" element={<MyShiftsPage />} />
+          <Route path="attendance" element={<MyAttendancePage />} />
+          <Route path="shift-request" element={<ShiftRequestPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="payslips" element={<PlaceholderPage title="給与明細" phase="Phase 3" />} />
+        </Route>
 
         {/* Root redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />
@@ -121,3 +126,5 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
+export { currYear, currMonth };

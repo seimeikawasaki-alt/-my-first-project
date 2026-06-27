@@ -29,6 +29,10 @@
     @apply w-full border border-border rounded-lg px-3 py-2.5 text-body focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all;
   }
 
+  .input {
+    @apply border border-border rounded-lg px-3 py-2.5 text-body focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all;
+  }
+
   .form-label {
     @apply block text-sub font-medium text-text mb-1;
   }

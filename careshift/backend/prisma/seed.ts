@@ -165,6 +165,24 @@ async function main() {
   }
 
   console.log('Salary items created');
+
+  // Create default shift types
+  const shiftTypes = [
+    { id: 'shift-type-1', name: '日勤', startTime: '08:00', endTime: '17:00', breakMinutes: 60, color: '#2563EB', isOvernight: false, isActive: true },
+    { id: 'shift-type-2', name: '夜勤', startTime: '22:00', endTime: '07:00', breakMinutes: 60, color: '#7C3AED', isOvernight: true, isActive: true },
+    { id: 'shift-type-3', name: '早番', startTime: '07:00', endTime: '16:00', breakMinutes: 60, color: '#10B981', isOvernight: false, isActive: true },
+    { id: 'shift-type-4', name: '遅番', startTime: '12:00', endTime: '21:00', breakMinutes: 60, color: '#F59E0B', isOvernight: false, isActive: true },
+  ];
+
+  for (const st of shiftTypes) {
+    await prisma.shiftType.upsert({
+      where: { id: st.id },
+      update: {},
+      create: st,
+    });
+  }
+
+  console.log('Shift types created');
   console.log('Seed completed successfully!');
 }
 
