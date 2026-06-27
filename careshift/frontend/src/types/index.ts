@@ -1,9 +1,10 @@
 export type UserRole = 'ADMIN' | 'GROUP_LEADER' | 'STAFF';
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT';
-export type ShiftStatus = 'DRAFT' | 'PUBLISHED';
+export type ShiftStatus = 'DRAFT' | 'PUBLISHED' | 'AUTO';
 export type AttendanceStatus = 'PUNCHED_IN' | 'ON_BREAK' | 'PUNCHED_OUT' | 'ABSENT' | 'PAID_LEAVE' | 'HOLIDAY_WORK';
 export type ShiftRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type ShiftRequestType = 'CHANGE' | 'CANCEL' | 'ADD';
+export type ShiftRequestType = 'VACATION' | 'PREFERRED' | 'CHANGE';
+export type SkillLevel = 'TRAINEE' | 'NORMAL' | 'SENIOR' | 'LEADER';
 
 export interface User {
   id: string;
@@ -113,15 +114,89 @@ export interface AttendanceSummary {
 export interface ShiftRequest {
   id: string;
   userId: string;
-  shiftId?: string | null;
   requestType: ShiftRequestType;
-  requestedDate?: string | null;
+  targetDate?: string | null;
+  shiftTypeId?: string | null;
   reason?: string | null;
+  priority: number;
   status: ShiftRequestStatus;
   reviewedBy?: string | null;
   reviewedAt?: string | null;
   createdAt: string;
   user?: { lastName: string; firstName: string };
+}
+
+export interface ShiftRequirement {
+  id: string;
+  shiftTypeId: string;
+  dayOfWeek?: number | null;
+  dateType: 'ALL' | 'WEEKDAY' | 'WEEKEND' | 'HOLIDAY';
+  minStaff: number;
+  maxStaff?: number | null;
+  groupId?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export interface ShiftRule {
+  id: string | null;
+  ruleType: string;
+  value: number;
+  description?: string | null;
+  isActive: boolean;
+  createdAt?: string | null;
+}
+
+export interface StaffConstraint {
+  id?: string;
+  userId: string;
+  maxWorkDaysPerMonth?: number | null;
+  maxNightShifts?: number | null;
+  availableDays?: number[] | null;
+  unavailableDates?: string[] | null;
+  preferredShiftTypes?: string[] | null;
+  skillLevel: SkillLevel;
+  canWorkNight: boolean;
+  requiresPairing: boolean;
+  pairingWithUserId?: string | null;
+  notPairWithUserId?: string | null;
+  notes?: string | null;
+}
+
+export interface GenerationWarning {
+  type: 'UNDERSTAFFED' | 'OVER_CONSECUTIVE' | 'NIGHT_LIMIT' | 'SKILL_SHORTAGE';
+  date: string;
+  shiftTypeName: string;
+  message: string;
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export interface UnfilledSlot {
+  date: string;
+  shiftTypeName: string;
+  required: number;
+  assigned: number;
+  shortage: number;
+}
+
+export interface GenerationResult {
+  success: boolean;
+  fulfilledRate: number;
+  totalShifts: number;
+  warnings: GenerationWarning[];
+  unfilledSlots: UnfilledSlot[];
+}
+
+export interface ShiftGenerationLog {
+  id: string;
+  year: number;
+  month: number;
+  groupId?: string | null;
+  status: 'COMPLETED' | 'PARTIAL' | 'FAILED';
+  fulfilledRate: number;
+  warnings?: string | null;
+  generatedBy: string;
+  createdAt: string;
 }
 
 export interface ApiResponse<T> {

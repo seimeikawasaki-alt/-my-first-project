@@ -13,15 +13,21 @@ export async function getMyShiftRequests() {
 
 export async function createShiftRequest(data: {
   requestType: ShiftRequestType;
-  shiftId?: string;
-  requestedDate?: string;
-  reason?: string;
+  targetDate?: string | null;
+  shiftTypeId?: string | null;
+  reason?: string | null;
+  priority?: number;
 }) {
   const res = await apiClient.post<ApiResponse<ShiftRequest>>('/shift-requests', data);
   return res.data;
 }
 
+export async function deleteShiftRequest(id: string) {
+  const res = await apiClient.delete<ApiResponse<{ message: string }>>(`/shift-requests/${id}`);
+  return res.data;
+}
+
 export async function reviewShiftRequest(id: string, data: { status: 'APPROVED' | 'REJECTED' }) {
-  const res = await apiClient.put<ApiResponse<ShiftRequest>>(`/shift-requests/${id}/review`, data);
+  const res = await apiClient.put<ApiResponse<ShiftRequest>>(`/shift-requests/${id}`, data);
   return res.data;
 }

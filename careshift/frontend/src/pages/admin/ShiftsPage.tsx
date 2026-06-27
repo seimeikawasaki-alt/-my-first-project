@@ -1,15 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Modal from '../../components/common/Modal';
-import { getShifts, createShift, updateShift, deleteShift, publishShifts, bulkCopyShifts } from '../../api/shifts';
+import { getShifts, createShift, updateShift, deleteShift, publishShifts, bulkCopyShifts, autoGenerateShifts } from '../../api/shifts';
 import { getShiftTypes } from '../../api/shiftTypes';
 import { staffApi } from '../../api/staff';
 import { groupsApi } from '../../api/groups';
-import type { Shift, ShiftType, User, Group } from '../../types';
+import type { Shift, ShiftType, User, Group, GenerationResult } from '../../types';
 
 type CellShift = Shift & { user?: { lastName: string; firstName: string } | null };
 
 const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
+
+const SEVERITY_COLOR: Record<string, string> = {
+  HIGH: 'bg-red-100 text-danger',
+  MEDIUM: 'bg-yellow-100 text-warning',
+  LOW: 'bg-gray-100 text-subtext',
+};
 
 export default function ShiftsPage() {
   const { year: yearStr, month: monthStr } = useParams<{ year: string; month: string }>();
@@ -26,12 +32,17 @@ export default function ShiftsPage() {
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   // Cell modal
   const [cellModal, setCellModal] = useState<{ userId: string; date: string } | null>(null);
   const [cellShift, setCellShift] = useState<CellShift | null>(null);
   const [selectedTypeId, setSelectedTypeId] = useState('');
   const [cellSaving, setCellSaving] = useState(false);
+
+  // Auto-generate result
+  const [genResult, setGenResult] = useState<GenerationResult | null>(null);
+  const [overwrite, setOverwrite] = useState(false);
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -59,7 +70,7 @@ export default function ShiftsPage() {
       ]);
       setShifts(shiftsRes.data);
       setShiftTypes(typesRes.data);
-      setStaff(staffRes.data.data.filter(u => u.role !== 'ADMIN'));
+      setStaff(staffRes.data.data.filter((u: User) => u.role !== 'ADMIN'));
       setGroups(groupsRes.data.data);
     } finally {
       setLoading(false);
@@ -106,7 +117,7 @@ export default function ShiftsPage() {
   };
 
   const handlePublish = async () => {
-    if (!confirm('このページのシフトを公開しますか？')) return;
+    if (!confirm('このページのシフトを公開しますか？（AUTO状態のシフトも含まれます）')) return;
     setPublishing(true);
     try {
       const res = await publishShifts({ year, month, groupId: selectedGroup || undefined });
@@ -134,12 +145,34 @@ export default function ShiftsPage() {
     }
   };
 
+  const handleAutoGenerate = async () => {
+    const msg = overwrite
+      ? `${year}年${month}月のDRAFT/AUTOシフトを上書きして自動生成しますか？`
+      : `${year}年${month}月のシフトを自動生成しますか？`;
+    if (!confirm(msg)) return;
+    setGenerating(true);
+    setGenResult(null);
+    try {
+      const res = await autoGenerateShifts({
+        year, month,
+        groupId: selectedGroup || undefined,
+        overwrite,
+      });
+      setGenResult(res.data);
+      load();
+    } catch {
+      alert('自動生成に失敗しました');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const typeMap = new Map(shiftTypes.map(t => [t.id, t]));
 
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-3">
           <button onClick={prevMonth} className="btn-secondary px-3">←</button>
           <h1 className="text-heading font-bold text-text">
@@ -165,6 +198,70 @@ export default function ShiftsPage() {
         </div>
       </div>
 
+      {/* Auto-generate panel */}
+      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex flex-wrap items-center gap-3">
+        <span className="text-sub font-medium text-primary">自動生成</span>
+        <label className="flex items-center gap-1.5 text-sub text-subtext cursor-pointer">
+          <input
+            type="checkbox"
+            checked={overwrite}
+            onChange={e => setOverwrite(e.target.checked)}
+            className="w-3.5 h-3.5"
+          />
+          既存シフトを上書き
+        </label>
+        <button
+          onClick={handleAutoGenerate}
+          disabled={generating}
+          className="btn-primary py-2 text-sub"
+        >
+          {generating ? '生成中...' : '自動生成を実行'}
+        </button>
+        <span className="text-xs text-subtext">※シフト要件・ルール・スタッフ制約を元に生成します</span>
+      </div>
+
+      {/* Generation result */}
+      {genResult && (
+        <div className={`mb-4 p-4 rounded-lg border ${genResult.unfilledSlots.length === 0 ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+          <div className="flex items-center gap-4 mb-2">
+            <span className="text-sub font-bold text-text">
+              生成完了: {genResult.totalShifts}件
+            </span>
+            <span className="text-sub text-text">
+              充足率: {Math.round(genResult.fulfilledRate * 100)}%
+            </span>
+            <button onClick={() => setGenResult(null)} className="ml-auto text-subtext hover:text-text text-xs">閉じる</button>
+          </div>
+          {genResult.unfilledSlots.length > 0 && (
+            <div className="mb-2">
+              <p className="text-xs font-medium text-warning mb-1">未充足スロット ({genResult.unfilledSlots.length}件)</p>
+              <div className="flex flex-wrap gap-1">
+                {genResult.unfilledSlots.slice(0, 10).map((s, i) => (
+                  <span key={i} className="text-xs bg-yellow-100 text-warning px-2 py-0.5 rounded">
+                    {s.date} {s.shiftTypeName} ({s.assigned}/{s.required}名)
+                  </span>
+                ))}
+                {genResult.unfilledSlots.length > 10 && (
+                  <span className="text-xs text-subtext">他 {genResult.unfilledSlots.length - 10}件</span>
+                )}
+              </div>
+            </div>
+          )}
+          {genResult.warnings.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-subtext mb-1">警告 ({genResult.warnings.length}件)</p>
+              <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+                {genResult.warnings.map((w, i) => (
+                  <span key={i} className={`text-xs px-2 py-0.5 rounded ${SEVERITY_COLOR[w.severity]}`}>
+                    {w.message}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Legend */}
       <div className="flex flex-wrap gap-2 mb-4">
         {shiftTypes.filter(t => t.isActive).map(t => (
@@ -174,6 +271,7 @@ export default function ShiftsPage() {
           </span>
         ))}
         <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-gray-200 text-subtext">未設定</span>
+        <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-100 text-primary border border-blue-200">AUTO (未確定)</span>
       </div>
 
       {/* Grid */}
@@ -210,13 +308,15 @@ export default function ShiftsPage() {
                   {days.map(d => {
                     const shift = shiftMap.get(`${user.id}-${d}`);
                     const type = shift?.shiftTypeId ? typeMap.get(shift.shiftTypeId) : null;
+                    const isAuto = shift?.status === 'AUTO';
                     const isDraft = shift?.status === 'DRAFT';
                     return (
                       <td key={d} className="p-0.5 text-center border-r border-border last:border-r-0">
                         <button
                           onClick={() => openCell(user.id, d)}
-                          className={`w-full h-8 rounded text-xs font-medium transition-opacity ${shift ? 'text-white' : 'text-gray-300 hover:bg-gray-100'} ${isDraft ? 'opacity-60' : ''}`}
+                          className={`w-full h-8 rounded text-xs font-medium transition-opacity ${shift ? 'text-white' : 'text-gray-300 hover:bg-gray-100'} ${isDraft ? 'opacity-60' : ''} ${isAuto ? 'ring-1 ring-blue-300' : ''}`}
                           style={type ? { backgroundColor: type.color ?? '#94A3B8' } : undefined}
+                          title={isAuto ? '自動生成（未確定）' : undefined}
                         >
                           {type ? type.name.slice(0, 2) : '+'}
                         </button>
@@ -250,7 +350,7 @@ export default function ShiftsPage() {
                 <button
                   key={t.id}
                   onClick={() => setSelectedTypeId(t.id)}
-                  className={`p-3 rounded-lg border text-sub text-center font-medium transition-all text-white`}
+                  className="p-3 rounded-lg border text-sub text-center font-medium transition-all"
                   style={{
                     backgroundColor: selectedTypeId === t.id ? (t.color ?? '#94A3B8') : 'transparent',
                     borderColor: t.color ?? '#94A3B8',

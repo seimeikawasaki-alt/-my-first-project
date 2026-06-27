@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
+import { generateShifts } from '../services/shiftGenerator.service.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -83,7 +84,7 @@ router.post('/publish', authenticate, authorize('ADMIN'), async (req: Request, r
   }
 
   const where: Record<string, unknown> = {
-    status: 'DRAFT',
+    status: { in: ['DRAFT', 'AUTO'] },
     shiftDate: { gte: start, lt: end },
   };
   if (userIds !== undefined) {
@@ -159,6 +160,47 @@ router.post('/bulk', authenticate, authorize('ADMIN'), async (req: Request, res:
   });
 
   sendSuccess(res, { copiedCount: result.count });
+});
+
+const autoGenerateSchema = z.object({
+  year: z.number().int().min(2000).max(2100),
+  month: z.number().int().min(1).max(12),
+  groupId: z.string().optional(),
+  overwrite: z.boolean().optional(),
+});
+
+// POST /api/v1/shifts/auto-generate — must be before /:id
+router.post('/auto-generate', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+  const parsed = autoGenerateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 400, 'VALIDATION_ERROR', '入力内容に誤りがあります',
+      parsed.error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
+    );
+    return;
+  }
+
+  const result = await generateShifts({
+    ...parsed.data,
+    adminUserId: req.user!.id,
+  });
+
+  sendSuccess(res, result);
+});
+
+// GET /api/v1/shifts/generation-logs — must be before /:id
+router.get('/generation-logs', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+  const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+  const month = req.query.month ? parseInt(req.query.month as string) : undefined;
+  const where: Record<string, unknown> = {};
+  if (year !== undefined && !isNaN(year)) where.year = year;
+  if (month !== undefined && !isNaN(month)) where.month = month;
+
+  const logs = await prisma.shiftGenerationLog.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  });
+  sendSuccess(res, logs);
 });
 
 // GET /api/v1/shifts

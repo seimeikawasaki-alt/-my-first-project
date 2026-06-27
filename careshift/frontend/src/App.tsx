@@ -13,6 +13,7 @@ import PlaceholderPage from './pages/admin/PlaceholderPage';
 import SettingsPage from './pages/admin/SettingsPage';
 import ShiftsPage from './pages/admin/ShiftsPage';
 import AttendancePage from './pages/admin/AttendancePage';
+import ShiftSettingsPage from './pages/admin/ShiftSettingsPage';
 import StaffDashboardPage from './pages/staff/StaffDashboardPage';
 import PunchPage from './pages/staff/PunchPage';
 import MyShiftsPage from './pages/staff/MyShiftsPage';
@@ -86,6 +87,7 @@ export default function App() {
           <Route path="shifts/:year/:month" element={<ShiftsPage />} />
           <Route path="attendance/:year/:month" element={<AttendancePage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="shift-settings" element={<ShiftSettingsPage />} />
           <Route
             path="salary/:year/:month"
             element={<PlaceholderPage title="給与計算" phase="Phase 3" />}

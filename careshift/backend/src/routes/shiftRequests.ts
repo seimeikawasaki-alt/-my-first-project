@@ -8,10 +8,11 @@ const router = Router();
 const prisma = new PrismaClient();
 
 const shiftRequestCreateSchema = z.object({
-  shiftId: z.string().optional().nullable(),
-  requestType: z.enum(['CHANGE', 'CANCEL', 'ADD']),
-  requestedDate: z.string().datetime().optional().nullable(),
+  requestType: z.enum(['VACATION', 'PREFERRED', 'CHANGE']),
+  targetDate: z.string().optional().nullable(),
+  shiftTypeId: z.string().optional().nullable(),
   reason: z.string().optional().nullable(),
+  priority: z.number().int().min(1).max(3).optional(),
 });
 
 const shiftRequestReviewSchema = z.object({
@@ -34,7 +35,6 @@ router.get('/', authenticate, authorize('ADMIN'), async (_req: Request, res: Res
     orderBy: { createdAt: 'desc' },
   });
 
-  // Attach user info via separate query
   const userIds = [...new Set(requests.map(r => r.userId))];
   const users = await prisma.user.findMany({
     where: { id: { in: userIds } },
@@ -60,18 +60,41 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
     return;
   }
 
-  const { requestedDate, ...rest } = parsed.data;
+  const { targetDate, ...rest } = parsed.data;
 
   const shiftRequest = await prisma.shiftRequest.create({
     data: {
       ...rest,
-      requestedDate: requestedDate ? new Date(requestedDate) : null,
+      targetDate: targetDate ? new Date(targetDate) : null,
       userId: req.user!.id,
       status: 'PENDING',
+      priority: rest.priority ?? 1,
     },
   });
 
   sendSuccess(res, shiftRequest, 201);
+});
+
+// DELETE /api/v1/shift-requests/:id — staff can delete their own pending requests
+router.delete('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
+  const existing = await prisma.shiftRequest.findUnique({ where: { id: req.params.id } });
+  if (!existing) {
+    sendError(res, 404, 'NOT_FOUND', 'シフト申請が見つかりません');
+    return;
+  }
+
+  const isAdmin = req.user!.role === 'ADMIN';
+  if (!isAdmin && existing.userId !== req.user!.id) {
+    sendError(res, 403, 'FORBIDDEN', '権限がありません');
+    return;
+  }
+  if (!isAdmin && existing.status !== 'PENDING') {
+    sendError(res, 400, 'BAD_REQUEST', '承認済みまたは却下済みの申請は削除できません');
+    return;
+  }
+
+  await prisma.shiftRequest.delete({ where: { id: req.params.id } });
+  sendSuccess(res, { message: '削除しました' });
 });
 
 // PUT /api/v1/shift-requests/:id — approve/reject (ADMIN only)

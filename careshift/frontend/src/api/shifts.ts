@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { Shift, ApiResponse } from '../types';
+import type { Shift, GenerationResult, ShiftGenerationLog, ApiResponse } from '../types';
 
 export async function getShifts(params: { year: number; month: number; groupId?: string }) {
   const res = await apiClient.get<ApiResponse<Shift[]>>('/shifts', { params });
@@ -46,5 +46,20 @@ export async function publishShifts(data: { year: number; month: number; groupId
 
 export async function bulkCopyShifts(data: { year: number; month: number; groupId?: string }) {
   const res = await apiClient.post<ApiResponse<{ copiedCount: number }>>('/shifts/bulk', data);
+  return res.data;
+}
+
+export async function autoGenerateShifts(data: {
+  year: number;
+  month: number;
+  groupId?: string;
+  overwrite?: boolean;
+}) {
+  const res = await apiClient.post<ApiResponse<GenerationResult>>('/shifts/auto-generate', data);
+  return res.data;
+}
+
+export async function getGenerationLogs(params?: { year?: number; month?: number }) {
+  const res = await apiClient.get<ApiResponse<ShiftGenerationLog[]>>('/shifts/generation-logs', { params });
   return res.data;
 }

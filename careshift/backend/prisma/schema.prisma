@@ -130,14 +130,65 @@ model PayrollDetail {
 }
 
 model ShiftRequest {
-  id            String    @id @default(uuid())
-  userId        String
-  shiftId       String?
-  requestType   String
-  requestedDate DateTime?
-  reason        String?
-  status        String    @default("PENDING")
-  reviewedBy    String?
-  reviewedAt    DateTime?
-  createdAt     DateTime  @default(now())
+  id          String    @id @default(uuid())
+  userId      String
+  requestType String
+  targetDate  DateTime?
+  shiftTypeId String?
+  reason      String?
+  priority    Int       @default(1)
+  status      String    @default("PENDING")
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model ShiftRequirement {
+  id          String   @id @default(uuid())
+  shiftTypeId String
+  dayOfWeek   Int?
+  dateType    String   @default("ALL")
+  minStaff    Int      @default(1)
+  maxStaff    Int?
+  groupId     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model ShiftRule {
+  id          String   @id @default(uuid())
+  ruleType    String   @unique
+  value       Int
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model StaffConstraint {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  maxWorkDaysPerMonth Int?
+  maxNightShifts      Int?
+  availableDays       String?
+  unavailableDates    String?
+  preferredShiftTypes String?
+  skillLevel          String   @default("NORMAL")
+  canWorkNight        Boolean  @default(true)
+  requiresPairing     Boolean  @default(false)
+  pairingWithUserId   String?
+  notPairWithUserId   String?
+  notes               String?
+  updatedAt           DateTime @updatedAt
+}
+
+model ShiftGenerationLog {
+  id            String   @id @default(uuid())
+  year          Int
+  month         Int
+  groupId       String?
+  status        String
+  fulfilledRate Float
+  warnings      String?
+  generatedBy   String
+  createdAt     DateTime @default(now())
 }
