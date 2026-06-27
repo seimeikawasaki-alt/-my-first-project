@@ -9,11 +9,14 @@ function pad(n: number) { return String(n).padStart(2, '0'); }
 
 export default function MyShiftsPage() {
   const now = new Date();
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,68 +49,192 @@ export default function MyShiftsPage() {
     return [`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`, s];
   }));
 
+  // Calendar grid setup
+  const firstDay = new Date(year, month - 1, 1).getDay(); // 0=Sun
   const daysInMonth = new Date(year, month, 0).getDate();
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  // Build calendar cells: leading empty + days
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  // Pad to complete last row
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const selectedShift = selectedDate ? shiftByDate.get(selectedDate) ?? null : null;
+  const selectedType = selectedShift?.shiftTypeId ? typeMap.get(selectedShift.shiftTypeId) : null;
+
+  // Monthly summary
+  const workDays = shifts.length;
+  const nightDays = shifts.filter(s => {
+    const t = s.shiftTypeId ? typeMap.get(s.shiftTypeId) : null;
+    return t?.isOvernight;
+  }).length;
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
       <header className="bg-white border-b border-border px-4 py-4">
         <div className="flex items-center justify-between max-w-lg mx-auto">
-          <button onClick={prevMonth} className="p-2 text-subtext hover:text-text">←</button>
+          <button onClick={prevMonth} className="p-2 text-subtext hover:text-text text-lg">←</button>
           <h1 className="text-card-title font-bold text-text">{year}年{month}月 シフト</h1>
-          <button onClick={nextMonth} className="p-2 text-subtext hover:text-text">→</button>
+          <button onClick={nextMonth} className="p-2 text-subtext hover:text-text text-lg">→</button>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6">
+      <main className="max-w-lg mx-auto px-3 py-4">
+        {/* Legend */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {shiftTypes.filter(t => t.isActive).map(t => (
+            <span
+              key={t.id}
+              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full text-white font-medium"
+              style={{ backgroundColor: t.color ?? '#94A3B8' }}
+            >
+              {t.name}
+            </span>
+          ))}
+        </div>
+
         {loading ? (
           <p className="text-center text-subtext py-12">読み込み中...</p>
         ) : (
-          <div className="space-y-2">
-            {days.map(d => {
-              const dateStr = `${year}-${pad(month)}-${pad(d)}`;
-              const date = new Date(year, month - 1, d);
-              const wd = date.getDay();
-              const shift = shiftByDate.get(dateStr);
-              const type = shift?.shiftTypeId ? typeMap.get(shift.shiftTypeId) : null;
-              const isSun = wd === 0;
-              const isSat = wd === 6;
-              const isToday = dateStr === `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-
-              return (
-                <div
-                  key={d}
-                  className={`flex items-center gap-4 px-4 py-3 rounded-xl bg-white border ${isToday ? 'border-primary' : 'border-border'}`}
-                >
-                  <div className={`w-12 text-center ${isToday ? 'font-bold text-primary' : isSun ? 'text-danger' : isSat ? 'text-primary' : 'text-text'}`}>
-                    <div className="text-lg font-bold">{d}</div>
-                    <div className="text-xs text-subtext">{WEEKDAY_JA[wd]}</div>
+          <>
+            {/* Calendar grid */}
+            <div className="bg-white rounded-xl border border-border overflow-hidden mb-4">
+              {/* Day headers */}
+              <div className="grid grid-cols-7 border-b border-border">
+                {WEEKDAY_JA.map((d, i) => (
+                  <div
+                    key={i}
+                    className={`py-2 text-center text-xs font-medium ${
+                      i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-subtext'
+                    }`}
+                  >
+                    {d}
                   </div>
-                  <div className="flex-1">
-                    {type ? (
-                      <div className="flex items-center gap-2">
+                ))}
+              </div>
+
+              {/* Calendar cells */}
+              <div className="grid grid-cols-7">
+                {cells.map((day, idx) => {
+                  if (day === null) {
+                    return <div key={`empty-${idx}`} className="h-16 border-b border-r border-border last:border-r-0 bg-gray-50" />;
+                  }
+
+                  const dateStr = `${year}-${pad(month)}-${pad(day)}`;
+                  const shift = shiftByDate.get(dateStr);
+                  const type = shift?.shiftTypeId ? typeMap.get(shift.shiftTypeId) : null;
+                  const isToday = dateStr === todayStr;
+                  const isSelected = dateStr === selectedDate;
+                  const col = idx % 7;
+                  const isSun = col === 0;
+                  const isSat = col === 6;
+
+                  return (
+                    <button
+                      key={dateStr}
+                      onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                      className={`h-16 border-b border-r border-border last:border-r-0 p-1 flex flex-col items-center transition-colors ${
+                        isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      {/* Date number */}
+                      <span
+                        className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-medium mb-0.5 ${
+                          isToday
+                            ? 'bg-primary text-white'
+                            : isSun
+                            ? 'text-danger'
+                            : isSat
+                            ? 'text-primary'
+                            : 'text-text'
+                        }`}
+                      >
+                        {day}
+                      </span>
+                      {/* Shift badge */}
+                      {type ? (
                         <span
-                          className="px-3 py-1.5 rounded-full text-white text-sub font-medium"
-                          style={{ backgroundColor: type.color ?? '#94A3B8' }}
+                          className="w-full text-center text-white rounded text-xs px-0.5 py-0.5 leading-tight font-medium truncate"
+                          style={{ backgroundColor: type.color ?? '#94A3B8', fontSize: '10px' }}
                         >
                           {type.name}
                         </span>
-                        <span className="text-sub text-subtext">
-                          {type.startTime}〜{type.endTime}
+                      ) : shift ? (
+                        <span className="w-full text-center bg-gray-200 text-subtext rounded text-xs px-0.5 py-0.5 leading-tight" style={{ fontSize: '10px' }}>
+                          シフト
                         </span>
-                      </div>
-                    ) : shift ? (
-                      <span className="text-sub text-subtext">
-                        {shift.startTime ? `${shift.startTime}〜${shift.endTime}` : 'シフトあり'}
-                      </span>
-                    ) : (
-                      <span className="text-sub text-subtext">—</span>
-                    )}
-                  </div>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Selected date detail */}
+            {selectedDate && (
+              <div className="bg-white rounded-xl border border-border px-4 py-4 mb-4">
+                {(() => {
+                  const [sy, sm, sd] = selectedDate.split('-').map(Number);
+                  const wd = new Date(sy, sm - 1, sd).getDay();
+                  return (
+                    <div>
+                      <p className="text-sub font-bold text-text mb-2">
+                        {sm}月{sd}日（{WEEKDAY_JA[wd]}）
+                      </p>
+                      {selectedType ? (
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="px-3 py-1.5 rounded-full text-white text-sub font-medium"
+                            style={{ backgroundColor: selectedType.color ?? '#94A3B8' }}
+                          >
+                            {selectedType.name}
+                          </span>
+                          <span className="text-sub text-subtext">
+                            {selectedType.startTime}〜{selectedType.endTime}
+                          </span>
+                          {selectedShift?.notes && (
+                            <span className="text-xs text-subtext">{selectedShift.notes}</span>
+                          )}
+                        </div>
+                      ) : selectedShift ? (
+                        <p className="text-sub text-subtext">
+                          {selectedShift.startTime
+                            ? `${selectedShift.startTime}〜${selectedShift.endTime}`
+                            : 'シフトあり'}
+                        </p>
+                      ) : (
+                        <p className="text-sub text-subtext">シフトなし（休日）</p>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Monthly summary */}
+            <div className="bg-white rounded-xl border border-border px-4 py-3">
+              <p className="text-xs font-medium text-subtext mb-2">今月のサマリー</p>
+              <div className="flex gap-6">
+                <div className="text-center">
+                  <p className="text-xl font-bold text-primary">{workDays}</p>
+                  <p className="text-xs text-subtext">勤務日数</p>
                 </div>
-              );
-            })}
-          </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-text">{daysInMonth - workDays}</p>
+                  <p className="text-xs text-subtext">休日</p>
+                </div>
+                {nightDays > 0 && (
+                  <div className="text-center">
+                    <p className="text-xl font-bold" style={{ color: '#7C3AED' }}>{nightDays}</p>
+                    <p className="text-xs text-subtext">夜勤</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
         )}
       </main>
     </div>
