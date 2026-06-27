@@ -54,6 +54,7 @@ model ShiftType {
   breakMinutes Int     @default(60)
   color        String?
   isOvernight  Boolean @default(false)
+  isNightShift Boolean @default(false)
   isActive     Boolean @default(true)
 }
 
@@ -191,4 +192,31 @@ model ShiftGenerationLog {
   warnings      String?
   generatedBy   String
   createdAt     DateTime @default(now())
+}
+
+model GroupShiftConfig {
+  id                      String   @id @default(uuid())
+  groupId                 String   @unique
+  maxConsecutive          Int?
+  maxNightPerMonth        Int?
+  enableFairDistribution  Boolean  @default(true)
+  fairDistributionTarget  String   @default("ALL")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model StaffShiftStats {
+  id           String   @id @default(uuid())
+  userId       String
+  year         Int
+  month        Int
+  nightCount   Int      @default(0)
+  earlyCount   Int      @default(0)
+  lateCount    Int      @default(0)
+  dayCount     Int      @default(0)
+  holidayCount Int      @default(0)
+  totalWorkDays Int     @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, year, month])
 }

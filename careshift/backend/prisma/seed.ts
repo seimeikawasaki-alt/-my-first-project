@@ -4,42 +4,102 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+const GROUPS = [
+  { id: 'group-1fa', name: '1F Aチーム', color: '#2563EB', description: '1階Aチームのスタッフグループ' },
+  { id: 'group-1fb', name: '1F Bチーム', color: '#10B981', description: '1階Bチームのスタッフグループ' },
+  { id: 'group-2fa', name: '2F Aチーム', color: '#F59E0B', description: '2階Aチームのスタッフグループ' },
+  { id: 'group-2fb', name: '2F Bチーム', color: '#8B5CF6', description: '2階Bチームのスタッフグループ' },
+  { id: 'group-night', name: '夜勤専従', color: '#EF4444', description: '夜勤専従スタッフグループ' },
+];
+
+// 50 staff: 10 per group
+// Within each group: index 0=LEADER, 1-2=SENIOR, 3-7=NORMAL, 8-9=TRAINEE
+// Employment: 0-5=FULL_TIME, 6-8=PART_TIME, 9=CONTRACT
+const LAST_NAMES = [
+  // group-1fa (001-010)
+  '田中', '鈴木', '佐藤', '山田', '伊藤', '渡辺', '中村', '小林', '加藤', '吉田',
+  // group-1fb (011-020)
+  '山本', '齋藤', '松本', '井上', '木村', '林', '清水', '山口', '松田', '池田',
+  // group-2fa (021-030)
+  '橋本', '阿部', '石川', '前田', '小川', '岡田', '後藤', '長谷川', '村上', '近藤',
+  // group-2fb (031-040)
+  '石田', '西村', '藤田', '坂本', '原', '野口', '竹内', '宮崎', '福田', '菅原',
+  // group-night (041-050)
+  '上田', '中島', '藤原', '小野', '田村', '岩田', '高野', '土屋', '成田', '川口',
+];
+
+const FIRST_NAMES = [
+  // group-1fa
+  '花子', '一郎', '美咲', '太一', '恵子', '健二', '由美', '翔太', 'さくら', '誠',
+  // group-1fb
+  '陽子', '浩二', '奈緒', '大輔', 'みどり', '隆', '愛', '拓海', 'ゆき', '宏',
+  // group-2fa
+  '幸子', '晴彦', '麻衣', '竜也', '千夏', '勝', '恵', '祐介', '真里', '直樹',
+  // group-2fb
+  '玲子', '博之', '美紀', '和也', '友子', '雄太', '七海', '剛', 'あかね', '貴志',
+  // group-night
+  '尚子', '達也', '理恵', '信一', '葉月', '洋介', '彩', '俊哉', '春菜', '勇気',
+];
+
+const KANA_LAST = [
+  'タナカ', 'スズキ', 'サトウ', 'ヤマダ', 'イトウ', 'ワタナベ', 'ナカムラ', 'コバヤシ', 'カトウ', 'ヨシダ',
+  'ヤマモト', 'サイトウ', 'マツモト', 'イノウエ', 'キムラ', 'ハヤシ', 'シミズ', 'ヤマグチ', 'マツダ', 'イケダ',
+  'ハシモト', 'アベ', 'イシカワ', 'マエダ', 'オガワ', 'オカダ', 'ゴトウ', 'ハセガワ', 'ムラカミ', 'コンドウ',
+  'イシダ', 'ニシムラ', 'フジタ', 'サカモト', 'ハラ', 'ノグチ', 'タケウチ', 'ミヤザキ', 'フクダ', 'スガワラ',
+  'ウエダ', 'ナカジマ', 'フジワラ', 'オノ', 'タムラ', 'イワタ', 'タカノ', 'ツチヤ', 'ナリタ', 'カワグチ',
+];
+
+const KANA_FIRST = [
+  'ハナコ', 'イチロウ', 'ミサキ', 'タイチ', 'ケイコ', 'ケンジ', 'ユミ', 'ショウタ', 'サクラ', 'マコト',
+  'ヨウコ', 'コウジ', 'ナオ', 'ダイスケ', 'ミドリ', 'タカシ', 'アイ', 'タクミ', 'ユキ', 'ヒロシ',
+  'サチコ', 'ハルヒコ', 'マイ', 'タツヤ', 'チナツ', 'マサル', 'メグミ', 'ユウスケ', 'マリ', 'ナオキ',
+  'レイコ', 'ヒロユキ', 'ミキ', 'カズヤ', 'トモコ', 'ユウタ', 'ナナミ', 'ツヨシ', 'アカネ', 'タカシ',
+  'ナオコ', 'タツヤ', 'リエ', 'シンイチ', 'ハヅキ', 'ヨウスケ', 'アヤ', 'トシヤ', 'ハルナ', 'ユウキ',
+];
+
+const HIRE_DATES = [
+  new Date('2020-04-01'), new Date('2021-04-01'), new Date('2021-10-01'),
+  new Date('2022-04-01'), new Date('2022-06-01'), new Date('2022-09-01'),
+  new Date('2023-01-15'), new Date('2023-04-01'), new Date('2023-07-01'), new Date('2023-10-01'),
+];
+
+function getSkillLevel(indexInGroup: number): string {
+  if (indexInGroup === 0) return 'LEADER';
+  if (indexInGroup <= 2) return 'SENIOR';
+  if (indexInGroup <= 7) return 'NORMAL';
+  return 'TRAINEE';
+}
+
+function getRole(indexInGroup: number): string {
+  if (indexInGroup === 0) return 'GROUP_LEADER';
+  return 'STAFF';
+}
+
+function getEmploymentType(indexInGroup: number): string {
+  if (indexInGroup <= 5) return 'FULL_TIME';
+  if (indexInGroup <= 8) return 'PART_TIME';
+  return 'CONTRACT';
+}
+
 async function main() {
   console.log('Seeding database...');
 
-  // Create groups
-  const group1 = await prisma.group.upsert({
-    where: { id: 'group-1f' },
-    update: {},
-    create: {
-      id: 'group-1f',
-      name: '1Fフロア',
-      color: '#2563EB',
-      description: '1階フロアのスタッフグループ',
-      isActive: true,
-    },
-  });
-
-  const group2 = await prisma.group.upsert({
-    where: { id: 'group-2f' },
-    update: {},
-    create: {
-      id: 'group-2f',
-      name: '2Fフロア',
-      color: '#10B981',
-      description: '2階フロアのスタッフグループ',
-      isActive: true,
-    },
-  });
-
-  console.log('Groups created:', group1.name, group2.name);
+  // Upsert groups
+  for (const g of GROUPS) {
+    await prisma.group.upsert({
+      where: { id: g.id },
+      update: { name: g.name, color: g.color, description: g.description, isActive: true },
+      create: { id: g.id, name: g.name, color: g.color, description: g.description, isActive: true },
+    });
+  }
+  console.log('Groups created:', GROUPS.map(g => g.name).join(', '));
 
   const saltRounds = 12;
   const adminHash = await bcrypt.hash('Admin1234!', saltRounds);
   const staffHash = await bcrypt.hash('Staff1234!', saltRounds);
 
   // Create admin
-  const admin = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { userCode: 'admin' },
     update: {},
     create: {
@@ -58,279 +118,80 @@ async function main() {
       isActive: true,
     },
   });
+  console.log('Admin created: admin');
 
-  // Create staff members
-  const staff1 = await prisma.user.upsert({
-    where: { userCode: 'staff001' },
-    update: {},
-    create: {
-      id: 'user-staff1',
-      userCode: 'staff001',
+  // Create 50 staff (10 per group)
+  const staffIds: string[] = [];
+  for (let i = 0; i < 50; i++) {
+    const globalIdx = i + 1;
+    const groupIdx = Math.floor(i / 10);
+    const indexInGroup = i % 10;
+    const group = GROUPS[groupIdx];
+    const userCode = `staff${String(globalIdx).padStart(3, '0')}`;
+    const userId = `user-staff${globalIdx}`;
+    const empType = getEmploymentType(indexInGroup);
+    const isNightGroup = group.id === 'group-night';
+
+    const userData = {
+      userCode,
       passwordHash: staffHash,
-      role: 'GROUP_LEADER',
-      lastName: '田中',
-      firstName: '花子',
-      lastNameKana: 'タナカ',
-      firstNameKana: 'ハナコ',
-      employmentType: 'FULL_TIME',
-      monthlySalary: 220000,
-      email: 'tanaka@careshift.jp',
-      phone: '090-1234-5678',
-      hireDate: new Date('2021-04-01'),
+      role: getRole(indexInGroup),
+      lastName: LAST_NAMES[i],
+      firstName: FIRST_NAMES[i],
+      lastNameKana: KANA_LAST[i],
+      firstNameKana: KANA_FIRST[i],
+      employmentType: empType,
+      monthlySalary: empType === 'FULL_TIME'
+        ? (indexInGroup === 0 ? 230000 : indexInGroup <= 2 ? 220000 : 210000)
+        : null,
+      hourlyWage: empType !== 'FULL_TIME'
+        ? (indexInGroup === 9 ? 1300 : indexInGroup === 8 ? 1100 : 1200)
+        : null,
+      email: `${userCode}@careshift.jp`,
+      phone: `090-${String(1000 + globalIdx).padStart(4, '0')}-${String(5000 + globalIdx).padStart(4, '0')}`,
+      hireDate: HIRE_DATES[indexInGroup],
       isActive: true,
-    },
-  });
+    };
 
-  const staff2 = await prisma.user.upsert({
-    where: { userCode: 'staff002' },
-    update: {},
-    create: {
-      id: 'user-staff2',
-      userCode: 'staff002',
-      passwordHash: staffHash,
-      role: 'STAFF',
-      lastName: '鈴木',
-      firstName: '一郎',
-      lastNameKana: 'スズキ',
-      firstNameKana: 'イチロウ',
-      employmentType: 'PART_TIME',
-      hourlyWage: 1200,
-      email: 'suzuki@careshift.jp',
-      phone: '090-2345-6789',
-      hireDate: new Date('2022-06-01'),
-      isActive: true,
-    },
-  });
+    await prisma.user.upsert({
+      where: { userCode },
+      update: {},
+      create: { id: userId, ...userData },
+    });
 
-  const staff3 = await prisma.user.upsert({
-    where: { userCode: 'staff003' },
-    update: {},
-    create: {
-      id: 'user-staff3',
-      userCode: 'staff003',
-      passwordHash: staffHash,
-      role: 'STAFF',
-      lastName: '佐藤',
-      firstName: '美咲',
-      lastNameKana: 'サトウ',
-      firstNameKana: 'ミサキ',
-      employmentType: 'PART_TIME',
-      hourlyWage: 1100,
-      email: 'sato@careshift.jp',
-      phone: '090-3456-7890',
-      hireDate: new Date('2023-01-15'),
-      isActive: true,
-    },
-  });
+    // Group membership
+    await prisma.userGroup.upsert({
+      where: { userId_groupId: { userId, groupId: group.id } },
+      update: {},
+      create: { userId, groupId: group.id, isLeader: indexInGroup === 0 },
+    });
 
-  const staff4 = await prisma.user.upsert({
-    where: { userCode: 'staff004' },
-    update: {},
-    create: {
-      id: 'user-staff4',
-      userCode: 'staff004',
-      passwordHash: staffHash,
-      role: 'STAFF',
-      lastName: '山田',
-      firstName: '太一',
-      lastNameKana: 'ヤマダ',
-      firstNameKana: 'タイチ',
-      employmentType: 'FULL_TIME',
-      monthlySalary: 210000,
-      email: 'yamada@careshift.jp',
-      hireDate: new Date('2021-10-01'),
-      isActive: true,
-    },
-  });
+    // Staff constraints
+    const skillLevel = getSkillLevel(indexInGroup);
+    const isTrainee = skillLevel === 'TRAINEE';
+    const isPartOrContract = empType !== 'FULL_TIME';
+    const canWorkNight = isNightGroup ? true : !isPartOrContract;
+    const maxWorkDays = indexInGroup === 9 ? 15 : null; // CONTRACT = 15 days max
 
-  const staff5 = await prisma.user.upsert({
-    where: { userCode: 'staff005' },
-    update: {},
-    create: {
-      id: 'user-staff5',
-      userCode: 'staff005',
-      passwordHash: staffHash,
-      role: 'STAFF',
-      lastName: '伊藤',
-      firstName: '恵子',
-      lastNameKana: 'イトウ',
-      firstNameKana: 'ケイコ',
-      employmentType: 'PART_TIME',
-      hourlyWage: 1150,
-      email: 'ito@careshift.jp',
-      hireDate: new Date('2022-04-01'),
-      isActive: true,
-    },
-  });
+    await prisma.staffConstraint.upsert({
+      where: { userId },
+      update: {},
+      create: {
+        userId,
+        skillLevel,
+        canWorkNight,
+        requiresPairing: isTrainee,
+        maxWorkDaysPerMonth: maxWorkDays,
+        maxNightShifts: isNightGroup ? 16 : (canWorkNight ? 8 : 0),
+      },
+    });
 
-  const staff6 = await prisma.user.upsert({
-    where: { userCode: 'staff006' },
-    update: {},
-    create: {
-      id: 'user-staff6',
-      userCode: 'staff006',
-      passwordHash: staffHash,
-      role: 'STAFF',
-      lastName: '渡辺',
-      firstName: '健二',
-      lastNameKana: 'ワタナベ',
-      firstNameKana: 'ケンジ',
-      employmentType: 'FULL_TIME',
-      monthlySalary: 215000,
-      email: 'watanabe@careshift.jp',
-      hireDate: new Date('2022-09-01'),
-      isActive: true,
-    },
-  });
+    staffIds.push(userId);
+  }
 
-  const staff7 = await prisma.user.upsert({
-    where: { userCode: 'staff007' },
-    update: {},
-    create: {
-      id: 'user-staff7',
-      userCode: 'staff007',
-      passwordHash: staffHash,
-      role: 'GROUP_LEADER',
-      lastName: '中村',
-      firstName: '由美',
-      lastNameKana: 'ナカムラ',
-      firstNameKana: 'ユミ',
-      employmentType: 'FULL_TIME',
-      monthlySalary: 230000,
-      email: 'nakamura@careshift.jp',
-      hireDate: new Date('2020-10-01'),
-      isActive: true,
-    },
-  });
+  console.log(`Created ${staffIds.length} staff members`);
 
-  const staff8 = await prisma.user.upsert({
-    where: { userCode: 'staff008' },
-    update: {},
-    create: {
-      id: 'user-staff8',
-      userCode: 'staff008',
-      passwordHash: staffHash,
-      role: 'STAFF',
-      lastName: '小林',
-      firstName: '翔太',
-      lastNameKana: 'コバヤシ',
-      firstNameKana: 'ショウタ',
-      employmentType: 'PART_TIME',
-      hourlyWage: 1100,
-      email: 'kobayashi@careshift.jp',
-      hireDate: new Date('2023-04-01'),
-      isActive: true,
-    },
-  });
-
-  const staff9 = await prisma.user.upsert({
-    where: { userCode: 'staff009' },
-    update: {},
-    create: {
-      id: 'user-staff9',
-      userCode: 'staff009',
-      passwordHash: staffHash,
-      role: 'STAFF',
-      lastName: '加藤',
-      firstName: 'さくら',
-      lastNameKana: 'カトウ',
-      firstNameKana: 'サクラ',
-      employmentType: 'PART_TIME',
-      hourlyWage: 1200,
-      email: 'kato@careshift.jp',
-      hireDate: new Date('2023-07-01'),
-      isActive: true,
-    },
-  });
-
-  const staff10 = await prisma.user.upsert({
-    where: { userCode: 'staff010' },
-    update: {},
-    create: {
-      id: 'user-staff10',
-      userCode: 'staff010',
-      passwordHash: staffHash,
-      role: 'STAFF',
-      lastName: '吉田',
-      firstName: '誠',
-      lastNameKana: 'ヨシダ',
-      firstNameKana: 'マコト',
-      employmentType: 'CONTRACT',
-      hourlyWage: 1300,
-      email: 'yoshida@careshift.jp',
-      hireDate: new Date('2023-10-01'),
-      isActive: true,
-    },
-  });
-
-  console.log('Users created:', admin.userCode, staff1.userCode, staff2.userCode, staff3.userCode,
-    staff4.userCode, staff5.userCode, staff6.userCode, staff7.userCode,
-    staff8.userCode, staff9.userCode, staff10.userCode);
-
-  // Assign users to groups
-  await prisma.userGroup.upsert({
-    where: { userId_groupId: { userId: 'user-staff1', groupId: 'group-1f' } },
-    update: {},
-    create: { userId: 'user-staff1', groupId: 'group-1f', isLeader: true },
-  });
-
-  await prisma.userGroup.upsert({
-    where: { userId_groupId: { userId: 'user-staff2', groupId: 'group-1f' } },
-    update: {},
-    create: { userId: 'user-staff2', groupId: 'group-1f', isLeader: false },
-  });
-
-  await prisma.userGroup.upsert({
-    where: { userId_groupId: { userId: 'user-staff3', groupId: 'group-2f' } },
-    update: {},
-    create: { userId: 'user-staff3', groupId: 'group-2f', isLeader: false },
-  });
-
-  await prisma.userGroup.upsert({
-    where: { userId_groupId: { userId: 'user-staff4', groupId: 'group-1f' } },
-    update: {},
-    create: { userId: 'user-staff4', groupId: 'group-1f', isLeader: false },
-  });
-
-  await prisma.userGroup.upsert({
-    where: { userId_groupId: { userId: 'user-staff5', groupId: 'group-1f' } },
-    update: {},
-    create: { userId: 'user-staff5', groupId: 'group-1f', isLeader: false },
-  });
-
-  await prisma.userGroup.upsert({
-    where: { userId_groupId: { userId: 'user-staff6', groupId: 'group-2f' } },
-    update: {},
-    create: { userId: 'user-staff6', groupId: 'group-2f', isLeader: false },
-  });
-
-  await prisma.userGroup.upsert({
-    where: { userId_groupId: { userId: 'user-staff7', groupId: 'group-2f' } },
-    update: {},
-    create: { userId: 'user-staff7', groupId: 'group-2f', isLeader: true },
-  });
-
-  await prisma.userGroup.upsert({
-    where: { userId_groupId: { userId: 'user-staff8', groupId: 'group-2f' } },
-    update: {},
-    create: { userId: 'user-staff8', groupId: 'group-2f', isLeader: false },
-  });
-
-  await prisma.userGroup.upsert({
-    where: { userId_groupId: { userId: 'user-staff9', groupId: 'group-1f' } },
-    update: {},
-    create: { userId: 'user-staff9', groupId: 'group-1f', isLeader: false },
-  });
-
-  await prisma.userGroup.upsert({
-    where: { userId_groupId: { userId: 'user-staff10', groupId: 'group-2f' } },
-    update: {},
-    create: { userId: 'user-staff10', groupId: 'group-2f', isLeader: false },
-  });
-
-  console.log('Group assignments created');
-
-  // Create default salary items
+  // Salary items
   const salaryItems = [
     { name: '基本給', itemType: 'INCOME', calcType: 'FIXED', isDefault: true, sortOrder: 1 },
     { name: '残業手当', itemType: 'INCOME', calcType: 'FORMULA', calcFormula: 'hourlyWage * 1.25 * overtimeHours', isDefault: true, sortOrder: 2 },
@@ -347,26 +208,39 @@ async function main() {
       create: { id: `salary-${item.sortOrder}`, ...item },
     });
   }
-
   console.log('Salary items created');
 
-  // Create default shift types
+  // Shift types
   const shiftTypes = [
-    { id: 'shift-type-1', name: '日勤', startTime: '08:00', endTime: '17:00', breakMinutes: 60, color: '#2563EB', isOvernight: false, isActive: true },
-    { id: 'shift-type-2', name: '夜勤', startTime: '22:00', endTime: '07:00', breakMinutes: 60, color: '#7C3AED', isOvernight: true, isActive: true },
-    { id: 'shift-type-3', name: '早番', startTime: '07:00', endTime: '16:00', breakMinutes: 60, color: '#10B981', isOvernight: false, isActive: true },
-    { id: 'shift-type-4', name: '遅番', startTime: '12:00', endTime: '21:00', breakMinutes: 60, color: '#F59E0B', isOvernight: false, isActive: true },
+    { id: 'shift-type-1', name: '日勤', startTime: '08:00', endTime: '17:00', breakMinutes: 60, color: '#2563EB', isOvernight: false, isNightShift: false, isActive: true },
+    { id: 'shift-type-2', name: '夜勤', startTime: '22:00', endTime: '07:00', breakMinutes: 60, color: '#7C3AED', isOvernight: true, isNightShift: true, isActive: true },
+    { id: 'shift-type-3', name: '早番', startTime: '07:00', endTime: '16:00', breakMinutes: 60, color: '#10B981', isOvernight: false, isNightShift: false, isActive: true },
+    { id: 'shift-type-4', name: '遅番', startTime: '12:00', endTime: '21:00', breakMinutes: 60, color: '#F59E0B', isOvernight: false, isNightShift: false, isActive: true },
   ];
 
   for (const st of shiftTypes) {
     await prisma.shiftType.upsert({
       where: { id: st.id },
-      update: {},
+      update: { isNightShift: st.isNightShift },
       create: st,
     });
   }
-
   console.log('Shift types created');
+
+  // Default GroupShiftConfig for each group
+  for (const g of GROUPS) {
+    await prisma.groupShiftConfig.upsert({
+      where: { groupId: g.id },
+      update: {},
+      create: {
+        groupId: g.id,
+        enableFairDistribution: true,
+        fairDistributionTarget: g.id === 'group-night' ? 'NIGHT' : 'ALL',
+      },
+    });
+  }
+  console.log('Group shift configs created');
+
   console.log('Seed completed successfully!');
 }
 

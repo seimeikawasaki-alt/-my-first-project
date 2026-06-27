@@ -61,7 +61,33 @@ export interface ShiftType {
   breakMinutes: number;
   color?: string | null;
   isOvernight: boolean;
+  isNightShift: boolean;
   isActive: boolean;
+}
+
+export interface GroupShiftConfig {
+  id: string;
+  groupId: string;
+  maxConsecutive?: number | null;
+  maxNightPerMonth?: number | null;
+  enableFairDistribution: boolean;
+  fairDistributionTarget: 'ALL' | 'NIGHT' | 'EARLY';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface StaffShiftStats {
+  id: string;
+  userId: string;
+  year: number;
+  month: number;
+  nightCount: number;
+  earlyCount: number;
+  lateCount: number;
+  dayCount: number;
+  holidayCount: number;
+  totalWorkDays: number;
+  updatedAt: string;
 }
 
 export interface Shift {

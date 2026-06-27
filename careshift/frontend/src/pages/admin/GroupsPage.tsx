@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { groupsApi, GroupCreateRequest } from '../../api/groups';
 import { staffApi } from '../../api/staff';
 import { Group, User } from '../../types';
@@ -22,6 +23,7 @@ interface ApiErrorResponse {
 }
 
 export default function GroupsPage() {
+  const navigate = useNavigate();
   const [groups, setGroups] = useState<Group[]>([]);
   const [allStaff, setAllStaff] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -181,10 +183,16 @@ export default function GroupsPage() {
 
               <div className="flex gap-2 pt-3 border-t border-border">
                 <button
-                  onClick={() => openMembers(group)}
-                  className="btn-secondary text-xs py-1.5 px-3 flex-1"
+                  onClick={() => navigate(`/admin/groups/${group.id}`)}
+                  className="btn-primary text-xs py-1.5 px-3 flex-1"
                 >
-                  メンバー管理
+                  詳細設定
+                </button>
+                <button
+                  onClick={() => openMembers(group)}
+                  className="btn-secondary text-xs py-1.5 px-3"
+                >
+                  メンバー
                 </button>
                 <button
                   onClick={() => openEdit(group)}

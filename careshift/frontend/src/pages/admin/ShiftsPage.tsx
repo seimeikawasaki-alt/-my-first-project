@@ -5,7 +5,7 @@ import { getShifts, createShift, updateShift, deleteShift, publishShifts, bulkCo
 import { getShiftTypes } from '../../api/shiftTypes';
 import { staffApi } from '../../api/staff';
 import { groupsApi } from '../../api/groups';
-import type { Shift, ShiftType, User, Group, GenerationResult } from '../../types';
+import type { Shift, ShiftType, User, Group, GenerationResult, StaffShiftStats } from '../../types';
 
 type CellShift = Shift & { user?: { lastName: string; firstName: string } | null };
 
@@ -43,6 +43,8 @@ export default function ShiftsPage() {
   // Auto-generate result
   const [genResult, setGenResult] = useState<GenerationResult | null>(null);
   const [overwrite, setOverwrite] = useState(false);
+  const [showGenModal, setShowGenModal] = useState(false);
+  const [staffStats, setStaffStats] = useState<StaffShiftStats[]>([]);
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -146,11 +148,8 @@ export default function ShiftsPage() {
   };
 
   const handleAutoGenerate = async () => {
-    const msg = overwrite
-      ? `${year}年${month}月のDRAFT/AUTOシフトを上書きして自動生成しますか？`
-      : `${year}年${month}月のシフトを自動生成しますか？`;
-    if (!confirm(msg)) return;
     setGenerating(true);
+    setShowGenModal(false);
     setGenResult(null);
     try {
       const res = await autoGenerateShifts({
@@ -159,6 +158,14 @@ export default function ShiftsPage() {
         overwrite,
       });
       setGenResult(res.data);
+      // Load staff stats after generation
+      if (selectedGroup) {
+        import('../../api/client').then(({ default: apiClient }) => {
+          apiClient.get(`/staff-shift-stats?year=${year}&month=${month}&groupId=${selectedGroup}`)
+            .then(r => setStaffStats((r.data as { data: StaffShiftStats[] }).data ?? []))
+            .catch(() => {});
+        });
+      }
       load();
     } catch {
       alert('自動生成に失敗しました');
@@ -211,7 +218,7 @@ export default function ShiftsPage() {
           既存シフトを上書き
         </label>
         <button
-          onClick={handleAutoGenerate}
+          onClick={() => setShowGenModal(true)}
           disabled={generating}
           className="btn-primary py-2 text-sub"
         >
@@ -223,15 +230,37 @@ export default function ShiftsPage() {
       {/* Generation result */}
       {genResult && (
         <div className={`mb-4 p-4 rounded-lg border ${genResult.unfilledSlots.length === 0 ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
-          <div className="flex items-center gap-4 mb-2">
-            <span className="text-sub font-bold text-text">
-              生成完了: {genResult.totalShifts}件
-            </span>
-            <span className="text-sub text-text">
-              充足率: {Math.round(genResult.fulfilledRate * 100)}%
-            </span>
-            <button onClick={() => setGenResult(null)} className="ml-auto text-subtext hover:text-text text-xs">閉じる</button>
+          <div className="flex items-center gap-4 mb-3">
+            <span className="text-sub font-bold text-text">生成完了: {genResult.totalShifts}件</span>
+            <span className="text-sub text-text">充足率: {Math.round(genResult.fulfilledRate * 100)}%</span>
+            <button onClick={() => { setGenResult(null); setStaffStats([]); }} className="ml-auto text-subtext hover:text-text text-xs">閉じる</button>
           </div>
+
+          {/* Fair distribution bars */}
+          {staffStats.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs font-medium text-subtext mb-2">均等分配状況（夜勤回数）</p>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {(() => {
+                  const maxNight = Math.max(...staffStats.map(s => s.nightCount), 1);
+                  return staffStats.sort((a, b) => b.nightCount - a.nightCount).map(s => {
+                    const member = staff.find(u => u.id === s.userId);
+                    if (!member) return null;
+                    return (
+                      <div key={s.userId} className="flex items-center gap-2 text-xs">
+                        <span className="w-20 text-subtext truncate">{member.lastName} {member.firstName}</span>
+                        <div className="flex-1 bg-gray-200 rounded-full h-2">
+                          <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${(s.nightCount / maxNight) * 100}%` }} />
+                        </div>
+                        <span className="w-6 text-right text-subtext">{s.nightCount}</span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          )}
+
           {genResult.unfilledSlots.length > 0 && (
             <div className="mb-2">
               <p className="text-xs font-medium text-warning mb-1">未充足スロット ({genResult.unfilledSlots.length}件)</p>
@@ -252,9 +281,7 @@ export default function ShiftsPage() {
               <p className="text-xs font-medium text-subtext mb-1">警告 ({genResult.warnings.length}件)</p>
               <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
                 {genResult.warnings.map((w, i) => (
-                  <span key={i} className={`text-xs px-2 py-0.5 rounded ${SEVERITY_COLOR[w.severity]}`}>
-                    {w.message}
-                  </span>
+                  <span key={i} className={`text-xs px-2 py-0.5 rounded ${SEVERITY_COLOR[w.severity]}`}>{w.message}</span>
                 ))}
               </div>
             </div>
@@ -329,6 +356,31 @@ export default function ShiftsPage() {
           </table>
         </div>
       )}
+
+      {/* Generation Confirmation Modal */}
+      <Modal
+        isOpen={showGenModal}
+        onClose={() => setShowGenModal(false)}
+        title="自動生成の確認"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sub text-text space-y-1">
+            <p><span className="font-medium">対象期間:</span> {year}年{month}月</p>
+            <p><span className="font-medium">対象グループ:</span> {selectedGroup ? groups.find(g => g.id === selectedGroup)?.name : '全グループ'}</p>
+            <p><span className="font-medium">上書き:</span> {overwrite ? 'あり（既存DRAFT/AUTOシフトを削除）' : 'なし'}</p>
+          </div>
+          <div className="text-sub text-subtext space-y-1">
+            <p>• シフト要件・生成ルール・スタッフ制約を元に自動生成します</p>
+            <p>• 夜勤翌日は夜勤または休みになるよう制御されます</p>
+            <p>• 夜勤・早番はグループ内で均等に分配されます</p>
+            <p>• 生成結果はAUTO（未確定）状態となります</p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button onClick={handleAutoGenerate} className="btn-primary">実行する</button>
+            <button onClick={() => setShowGenModal(false)} className="btn-secondary">キャンセル</button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Cell Modal */}
       <Modal

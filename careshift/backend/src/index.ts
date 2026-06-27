@@ -14,6 +14,7 @@ import shiftRequestsRouter from './routes/shiftRequests.js';
 import shiftRulesRouter from './routes/shiftRules.js';
 import shiftRequirementsRouter from './routes/shiftRequirements.js';
 import staffConstraintsRouter from './routes/staffConstraints.js';
+import staffShiftStatsRouter from './routes/staffShiftStats.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,6 +39,7 @@ app.use('/api/v1/shift-requests', shiftRequestsRouter);
 app.use('/api/v1/shift-rules', shiftRulesRouter);
 app.use('/api/v1/shift-requirements', shiftRequirementsRouter);
 app.use('/api/v1/staff-constraints', staffConstraintsRouter);
+app.use('/api/v1/staff-shift-stats', staffShiftStatsRouter);
 
 app.get('/api/v1/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

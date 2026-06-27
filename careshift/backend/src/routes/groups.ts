@@ -165,4 +165,44 @@ router.delete('/:id/members/:userId', authenticate, authorize('ADMIN'), async (r
   sendSuccess(res, { message: 'メンバーを削除しました' });
 });
 
+// GET /api/v1/groups/:id/shift-config
+router.get('/:id/shift-config', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+  const config = await (prisma as unknown as { groupShiftConfig: { findUnique: (args: object) => Promise<unknown> } }).groupShiftConfig.findUnique({
+    where: { groupId: req.params.id },
+  });
+  sendSuccess(res, config ?? null);
+});
+
+// PUT /api/v1/groups/:id/shift-config
+router.put('/:id/shift-config', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+  const schema = z.object({
+    maxConsecutive: z.number().int().positive().nullable().optional(),
+    maxNightPerMonth: z.number().int().positive().nullable().optional(),
+    enableFairDistribution: z.boolean().optional(),
+    fairDistributionTarget: z.enum(['ALL', 'NIGHT', 'EARLY']).optional(),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 400, 'VALIDATION_ERROR', '入力内容に誤りがあります',
+      parsed.error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
+    );
+    return;
+  }
+
+  const group = await prisma.group.findUnique({ where: { id: req.params.id } });
+  if (!group) {
+    sendError(res, 404, 'NOT_FOUND', 'グループが見つかりません');
+    return;
+  }
+
+  const config = await (prisma as unknown as { groupShiftConfig: { upsert: (args: object) => Promise<unknown> } }).groupShiftConfig.upsert({
+    where: { groupId: req.params.id },
+    update: parsed.data,
+    create: { groupId: req.params.id, ...parsed.data },
+  });
+
+  sendSuccess(res, config);
+});
+
 export default router;
