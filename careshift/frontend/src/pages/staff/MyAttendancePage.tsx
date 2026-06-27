@@ -22,10 +22,12 @@ const STATUS_COLORS: Record<string, string> = {
 
 function pad(n: number) { return String(n).padStart(2, '0'); }
 
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 function formatTime(dt: string | null | undefined): string {
   if (!dt) return '—';
-  const d = new Date(dt);
-  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  const jst = new Date(new Date(dt).getTime() + JST_OFFSET_MS);
+  return `${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`;
 }
 
 function minutesToHM(min: number | null | undefined): string {

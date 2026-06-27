@@ -22,18 +22,22 @@ const STATUS_COLORS: Record<string, string> = {
   HOLIDAY_WORK: 'bg-purple-100 text-purple-600',
 };
 
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+function toJST(dt: string | Date): Date {
+  return new Date(new Date(dt).getTime() + JST_OFFSET_MS);
+}
+
 function toTimeInput(dt: string | null | undefined): string {
   if (!dt) return '';
-  const d = new Date(dt);
-  const h = String(d.getUTCHours()).padStart(2, '0');
-  const m = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
+  const jst = toJST(dt);
+  return `${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`;
 }
 
 function formatDateTime(dt: string | null | undefined): string {
   if (!dt) return '—';
-  const d = new Date(dt);
-  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+  const jst = toJST(dt);
+  return `${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`;
 }
 
 function formatDate(dt: string): string {
@@ -111,7 +115,8 @@ export default function AttendancePage() {
     if (!time) return undefined;
     const d = new Date(date);
     const [h, m] = time.split(':').map(Number);
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h, m)).toISOString();
+    const utcMs = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h, m) - JST_OFFSET_MS;
+    return new Date(utcMs).toISOString();
   };
 
   const handleCorrection = async () => {
