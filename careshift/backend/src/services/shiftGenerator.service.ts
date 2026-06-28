@@ -117,6 +117,8 @@ export async function generateShifts(params: {
   const enableFairDistribution = groupConfig?.enableFairDistribution ?? true;
   const fairTarget = groupConfig?.fairDistributionTarget ?? 'ALL';
 
+  console.log(`[generateShifts] year=${year} month=${month} groupId=${groupId ?? 'ALL'} overwrite=${overwrite} nightShiftIds=[${[...nightShiftIds].join(',')}] minRestAfterNight=${minRestAfterNight}h`);
+
   // How many calendar days to block after a night shift
   // Night shift ends next morning (isOvernight), so count from the start day
   // MIN_REST_AFTER_NIGHT=16: 夜勤22:00-07:00 → ends 07:00 +16h = 23:00 next day → block 1 day
@@ -361,6 +363,9 @@ export async function generateShifts(params: {
   }
 
   const fulfilledRate = totalRequiredSlots > 0 ? Math.min(1, generatedShifts.length / totalRequiredSlots) : 1;
+
+  const totalNight = staffStates.reduce((acc, s) => acc + s.nightShifts, 0);
+  console.log(`[generateShifts] done: totalShifts=${generatedShifts.length} totalNightShifts=${totalNight} (night-after-night rest rule active)`);
 
   // Save StaffShiftStats (non-fatal)
   try {
