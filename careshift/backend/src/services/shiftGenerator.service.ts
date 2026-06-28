@@ -29,6 +29,7 @@ export interface UnfilledSlot {
 interface StaffState {
   id: string;
   maxWorkDaysPerMonth: number | null;
+  minWorkDaysPerMonth: number | null;
   maxNightShifts: number | null;
   availableDays: number[] | null;
   canWorkNight: boolean;
@@ -37,17 +38,28 @@ interface StaffState {
   pairingWithUserId: string | null;
   notPairWithUserId: string | null;
   unavailableDateSet: Set<string>;
+  // Dates where ONLY night shifts are allowed (day after night shift)
+  nightRestOnlyDates: Set<string>;
   workDays: number;
   nightShifts: number;
   earlyShiftCount: number;
   consecutiveWorkDays: number;
   lastWorkDate: string | null;
-  lastWasNight: boolean;
   assignedDates: Set<string>;
 }
 
 function dateKey(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function addUTCDays(date: Date, n: number): Date {
+  return new Date(date.getTime() + n * 86400000);
+}
+
+/** Detect night shift: prefer isNightShift field, fall back to isOvernight */
+function isNightShiftType(st: { isOvernight: boolean; isNightShift?: boolean }): boolean {
+  const ns = (st as { isNightShift?: boolean }).isNightShift;
+  return ns != null ? ns : st.isOvernight;
 }
 
 export async function generateShifts(params: {
@@ -66,11 +78,11 @@ export async function generateShifts(params: {
   // Load shift types
   const shiftTypes = await prisma.shiftType.findMany({ where: { isActive: true } });
   const shiftTypeMap = new Map(shiftTypes.map(st => [st.id, st]));
-  const nightShiftIds = new Set(shiftTypes.filter(st => (st as { isNightShift: boolean }).isNightShift).map(st => st.id));
+  const nightShiftIds = new Set(
+    shiftTypes.filter(st => isNightShiftType(st as { isOvernight: boolean; isNightShift?: boolean })).map(st => st.id)
+  );
   const earlyShiftIds = new Set(
-    shiftTypes
-      .filter(st => !st.isOvernight && st.startTime < '08:00')
-      .map(st => st.id)
+    shiftTypes.filter(st => !st.isOvernight && st.startTime < '08:00').map(st => st.id)
   );
 
   const requirements = await prisma.shiftRequirement.findMany({ where: { isActive: true } });
@@ -80,23 +92,36 @@ export async function generateShifts(params: {
   const ruleMap: Record<string, number> = {};
   rules.forEach(r => { ruleMap[r.ruleType] = r.value; });
 
-  // Load group config (overrides global rules; non-fatal if table doesn't exist)
-  let groupConfig: { maxConsecutive: number | null; maxNightPerMonth: number | null; enableFairDistribution: boolean; fairDistributionTarget: string } | null = null;
+  // Load group config (non-fatal)
+  let groupConfig: {
+    maxConsecutive: number | null;
+    maxNightPerMonth: number | null;
+    enableFairDistribution: boolean;
+    fairDistributionTarget: string;
+  } | null = null;
   if (groupId) {
     try {
-      const gc = await (prisma as unknown as { groupShiftConfig: { findUnique: (args: object) => Promise<unknown> } }).groupShiftConfig.findUnique({ where: { groupId } });
+      const gc = await (prisma as unknown as {
+        groupShiftConfig: { findUnique: (args: object) => Promise<unknown> };
+      }).groupShiftConfig.findUnique({ where: { groupId } });
       if (gc) groupConfig = gc as typeof groupConfig;
-    } catch {
-      // ignore if table doesn't exist yet
-    }
+    } catch { /* table may not exist yet */ }
   }
 
   const maxConsecutive = groupConfig?.maxConsecutive ?? ruleMap['MAX_CONSECUTIVE_WORK_DAYS'] ?? 5;
   const maxNightPerMonth = groupConfig?.maxNightPerMonth ?? ruleMap['MAX_NIGHT_SHIFTS_PER_MONTH'] ?? 8;
   const maxConsecutiveNight = ruleMap['MAX_CONSECUTIVE_NIGHT'] ?? 2;
   const minSkilledPerShift = ruleMap['MIN_SKILLED_PER_SHIFT'] ?? 1;
+  const minRestAfterNight = ruleMap['MIN_REST_AFTER_NIGHT'] ?? 16;
+  const minWorkDaysPerMonth = ruleMap['MIN_WORK_DAYS_PER_MONTH'] ?? 0;
   const enableFairDistribution = groupConfig?.enableFairDistribution ?? true;
   const fairTarget = groupConfig?.fairDistributionTarget ?? 'ALL';
+
+  // How many calendar days to block after a night shift
+  // Night shift ends next morning (isOvernight), so count from the start day
+  // MIN_REST_AFTER_NIGHT=16: 夜勤22:00-07:00 → ends 07:00 +16h = 23:00 next day → block 1 day
+  // MIN_REST_AFTER_NIGHT=32: ends 07:00 +32h = 15:00 day+2 → block 2 days
+  const nightRestBlockDays = Math.max(1, Math.ceil(minRestAfterNight / 24));
 
   // Load staff
   const staffWhere: Record<string, unknown> = { isActive: true, role: { not: 'ADMIN' } };
@@ -116,12 +141,7 @@ export async function generateShifts(params: {
 
   // Load approved vacation requests
   const vacationRequests = await prisma.shiftRequest.findMany({
-    where: {
-      userId: { in: staffIds },
-      requestType: 'VACATION',
-      status: 'APPROVED',
-      targetDate: { gte: monthStart, lt: monthEnd },
-    },
+    where: { userId: { in: staffIds }, requestType: 'VACATION', status: 'APPROVED', targetDate: { gte: monthStart, lt: monthEnd } },
   });
   const vacationMap = new Map<string, Set<string>>();
   for (const req of vacationRequests) {
@@ -131,14 +151,9 @@ export async function generateShifts(params: {
     vacationMap.get(req.userId)!.add(dk);
   }
 
-  // Load approved preferred shift requests
+  // Load approved preferred requests
   const preferredRequests = await prisma.shiftRequest.findMany({
-    where: {
-      userId: { in: staffIds },
-      requestType: 'PREFERRED',
-      status: 'APPROVED',
-      targetDate: { gte: monthStart, lt: monthEnd },
-    },
+    where: { userId: { in: staffIds }, requestType: 'PREFERRED', status: 'APPROVED', targetDate: { gte: monthStart, lt: monthEnd } },
   });
   const preferredMap = new Map<string, Map<string, string>>();
   for (const req of preferredRequests) {
@@ -148,7 +163,7 @@ export async function generateShifts(params: {
     preferredMap.get(req.userId)!.set(dk, req.shiftTypeId);
   }
 
-  // Initialize staff state
+  // Initialize staff states
   const staffStates: StaffState[] = staffIds.map((id: string) => {
     const c = constraintMap.get(id) as {
       maxWorkDaysPerMonth: number | null;
@@ -165,6 +180,7 @@ export async function generateShifts(params: {
     return {
       id,
       maxWorkDaysPerMonth: c?.maxWorkDaysPerMonth ?? null,
+      minWorkDaysPerMonth: minWorkDaysPerMonth > 0 ? minWorkDaysPerMonth : null,
       maxNightShifts: c?.maxNightShifts ?? null,
       availableDays: c?.availableDays ? JSON.parse(c.availableDays) : null,
       canWorkNight: c?.canWorkNight ?? true,
@@ -173,23 +189,19 @@ export async function generateShifts(params: {
       pairingWithUserId: c?.pairingWithUserId ?? null,
       notPairWithUserId: c?.notPairWithUserId ?? null,
       unavailableDateSet: new Set(unavailableArr),
+      nightRestOnlyDates: new Set(),
       workDays: 0,
       nightShifts: 0,
       earlyShiftCount: 0,
       consecutiveWorkDays: 0,
       lastWorkDate: null,
-      lastWasNight: false,
       assignedDates: new Set(),
     };
   });
 
   if (overwrite) {
     await prisma.shift.deleteMany({
-      where: {
-        userId: { in: staffIds },
-        shiftDate: { gte: monthStart, lt: monthEnd },
-        status: { in: ['DRAFT', 'AUTO'] },
-      },
+      where: { userId: { in: staffIds }, shiftDate: { gte: monthStart, lt: monthEnd }, status: { in: ['DRAFT', 'AUTO'] } },
     });
   }
 
@@ -206,7 +218,7 @@ export async function generateShifts(params: {
     const dayReqs = getDayRequirements(requirements, dayOfWeek, shiftTypes);
     if (dayReqs.size === 0) continue;
 
-    // Sort: night shifts first so rest-day tracking propagates correctly
+    // Process night shifts first so nightRestOnlyDates propagate before day shifts
     const sortedShiftTypeIds = [...dayReqs.keys()].sort((a, b) => {
       return (nightShiftIds.has(a) ? 0 : 1) - (nightShiftIds.has(b) ? 0 : 1);
     });
@@ -220,14 +232,13 @@ export async function generateShifts(params: {
       const isNight = nightShiftIds.has(shiftTypeId);
       const isEarly = earlyShiftIds.has(shiftTypeId);
 
-      // Find eligible staff
       const eligible = staffStates.filter(staff => {
         if (staff.assignedDates.has(dk)) return false;
         if (vacationMap.get(staff.id)?.has(dk)) return false;
         if (staff.unavailableDateSet.has(dk)) return false;
+        // HARD rule: day after night shift → only night shifts allowed
+        if (staff.nightRestOnlyDates.has(dk) && !isNight) return false;
         if (!staff.canWorkNight && isNight) return false;
-        // HARD: after a night shift, next day must be night or off
-        if (staff.lastWasNight && !isNight) return false;
         if (isNight && staff.nightShifts >= maxNightPerMonth) return false;
         if (staff.maxNightShifts !== null && isNight && staff.nightShifts >= staff.maxNightShifts) return false;
         if (staff.maxWorkDaysPerMonth !== null && staff.workDays >= staff.maxWorkDaysPerMonth) return false;
@@ -236,16 +247,22 @@ export async function generateShifts(params: {
         return true;
       });
 
-      // Fair distribution sort + preference
+      // Sort: prefer staff below minimum work days, then fair distribution, then least work days
       const sorted = [...eligible].sort((a, b) => {
+        // Preferred shift request comes first
         const aPref = preferredMap.get(a.id)?.get(dk) === shiftTypeId ? 0 : 1;
         const bPref = preferredMap.get(b.id)?.get(dk) === shiftTypeId ? 0 : 1;
         if (aPref !== bPref) return aPref - bPref;
 
-        if (enableFairDistribution && (fairTarget === 'ALL' || (fairTarget === 'NIGHT' && isNight) || (fairTarget === 'EARLY' && isEarly))) {
-          if (isNight) return a.nightShifts - b.nightShifts;
-          if (isEarly) return a.earlyShiftCount - b.earlyShiftCount;
-          return a.workDays - b.workDays;
+        // Staff below minimum work days get priority
+        const aUnder = a.minWorkDaysPerMonth != null && a.workDays < a.minWorkDaysPerMonth ? 0 : 1;
+        const bUnder = b.minWorkDaysPerMonth != null && b.workDays < b.minWorkDaysPerMonth ? 0 : 1;
+        if (aUnder !== bUnder) return aUnder - bUnder;
+
+        // Fair distribution
+        if (enableFairDistribution) {
+          if (isNight && (fairTarget === 'ALL' || fairTarget === 'NIGHT')) return a.nightShifts - b.nightShifts;
+          if (isEarly && (fairTarget === 'ALL' || fairTarget === 'EARLY')) return a.earlyShiftCount - b.earlyShiftCount;
         }
 
         if (isNight) {
@@ -257,7 +274,6 @@ export async function generateShifts(params: {
       });
 
       const skillLevels = new Set(['SENIOR', 'LEADER']);
-      const needsSkilled = minSkilledPerShift > 0;
       const assigned: StaffState[] = [];
 
       for (const staff of sorted) {
@@ -269,13 +285,13 @@ export async function generateShifts(params: {
         assigned.push(staff);
         if (assigned.length >= req.min) {
           const skilledCount = assigned.filter(s => skillLevels.has(s.skillLevel)).length;
-          if (!needsSkilled || skilledCount >= minSkilledPerShift) break;
+          if (!minSkilledPerShift || skilledCount >= minSkilledPerShift) break;
         }
       }
 
       // Skill shortage warning
       const assignedSkilled = assigned.filter(s => skillLevels.has(s.skillLevel)).length;
-      if (needsSkilled && assigned.length > 0 && assignedSkilled < minSkilledPerShift) {
+      if (minSkilledPerShift && assigned.length > 0 && assignedSkilled < minSkilledPerShift) {
         warnings.push({ type: 'SKILL_SHORTAGE', date: dk, shiftTypeName: shiftType.name, message: `${dk} ${shiftType.name}: 有資格者が不足しています`, severity: 'MEDIUM' });
       }
 
@@ -289,7 +305,21 @@ export async function generateShifts(params: {
         generatedShifts.push({ userId: staff.id, shiftTypeId, shiftDate: date, status: 'AUTO', createdBy: adminUserId });
         staff.assignedDates.add(dk);
         staff.workDays++;
-        if (isNight) staff.nightShifts++;
+        if (isNight) {
+          staff.nightShifts++;
+          // Block next N calendar days: only night shifts allowed (MIN_REST_AFTER_NIGHT)
+          for (let r = 1; r <= nightRestBlockDays; r++) {
+            const restDate = addUTCDays(date, r);
+            const restDk = dateKey(restDate);
+            if (r === 1) {
+              // Day immediately after: can still do consecutive night shifts
+              staff.nightRestOnlyDates.add(restDk);
+            } else {
+              // Further days (when minRestAfterNight > 24h): fully blocked
+              staff.unavailableDateSet.add(restDk);
+            }
+          }
+        }
         if (isEarly) staff.earlyShiftCount++;
 
         if (staff.lastWorkDate) {
@@ -300,7 +330,6 @@ export async function generateShifts(params: {
           staff.consecutiveWorkDays = 1;
         }
         staff.lastWorkDate = dk;
-        staff.lastWasNight = isNight;
 
         if (staff.consecutiveWorkDays > maxConsecutive) {
           warnings.push({ type: 'OVER_CONSECUTIVE', date: dk, shiftTypeName: shiftType.name, message: `スタッフ${staff.id.slice(0, 6)}: 連続勤務${staff.consecutiveWorkDays}日`, severity: 'MEDIUM' });
@@ -311,11 +340,10 @@ export async function generateShifts(params: {
       }
     }
 
-    // Reset consecutive tracking for staff not working today
+    // Reset consecutive tracking for staff not assigned today
     for (const staff of staffStates) {
       if (!staff.assignedDates.has(dk)) {
         staff.consecutiveWorkDays = 0;
-        if (staff.lastWasNight) staff.lastWasNight = false;
       }
     }
   }
@@ -332,40 +360,25 @@ export async function generateShifts(params: {
     await prisma.shift.createMany({ data: generatedShifts, skipDuplicates: true });
   }
 
-  const fulfilledRate = totalRequiredSlots > 0
-    ? Math.min(1, generatedShifts.length / totalRequiredSlots)
-    : 1;
+  const fulfilledRate = totalRequiredSlots > 0 ? Math.min(1, generatedShifts.length / totalRequiredSlots) : 1;
 
-  // Save StaffShiftStats (non-fatal: may not exist if migration hasn't run)
+  // Save StaffShiftStats (non-fatal)
   try {
     for (const staff of staffStates) {
       if (staff.workDays === 0) continue;
-      await (prisma as unknown as { staffShiftStats: { upsert: (args: object) => Promise<unknown> } }).staffShiftStats.upsert({
+      await (prisma as unknown as {
+        staffShiftStats: { upsert: (args: object) => Promise<unknown> };
+      }).staffShiftStats.upsert({
         where: { userId_year_month: { userId: staff.id, year, month } },
-        update: {
-          nightCount: staff.nightShifts,
-          earlyCount: staff.earlyShiftCount,
-          totalWorkDays: staff.workDays,
-        },
-        create: {
-          userId: staff.id,
-          year,
-          month,
-          nightCount: staff.nightShifts,
-          earlyCount: staff.earlyShiftCount,
-          totalWorkDays: staff.workDays,
-        },
+        update: { nightCount: staff.nightShifts, earlyCount: staff.earlyShiftCount, totalWorkDays: staff.workDays },
+        create: { userId: staff.id, year, month, nightCount: staff.nightShifts, earlyCount: staff.earlyShiftCount, totalWorkDays: staff.workDays },
       });
     }
-  } catch {
-    // ignore if table doesn't exist yet
-  }
+  } catch { /* ignore if table doesn't exist yet */ }
 
   await prisma.shiftGenerationLog.create({
     data: {
-      year,
-      month,
-      groupId: groupId ?? null,
+      year, month, groupId: groupId ?? null,
       status: unfilledSlots.length === 0 ? 'COMPLETED' : 'PARTIAL',
       fulfilledRate,
       warnings: JSON.stringify(uniqueWarnings),

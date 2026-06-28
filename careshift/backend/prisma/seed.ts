@@ -251,6 +251,8 @@ async function main() {
     { ruleType: 'MAX_NIGHT_SHIFTS_PER_MONTH', value: 8, description: '月最大夜勤回数', isActive: true },
     { ruleType: 'MAX_CONSECUTIVE_NIGHT', value: 2, description: '最大連続夜勤回数', isActive: true },
     { ruleType: 'MIN_SKILLED_PER_SHIFT', value: 1, description: '1シフトあたり最低スキル者数', isActive: true },
+    { ruleType: 'MIN_REST_AFTER_NIGHT', value: 16, description: '夜勤後の最低休息時間（時間）', isActive: true },
+    { ruleType: 'MIN_WORK_DAYS_PER_MONTH', value: 15, description: '月最低勤務日数（目標）', isActive: true },
   ];
   for (const rule of shiftRules) {
     await prisma.shiftRule.upsert({
