@@ -227,19 +227,66 @@ async function main() {
   }
   console.log('Shift types created');
 
-  // Default GroupShiftConfig for each group
-  for (const g of GROUPS) {
-    await prisma.groupShiftConfig.upsert({
-      where: { groupId: g.id },
+  // Default GroupShiftConfig for each group (requires migration)
+  try {
+    for (const g of GROUPS) {
+      await (prisma as unknown as { groupShiftConfig: { upsert: (args: object) => Promise<unknown> } }).groupShiftConfig.upsert({
+        where: { groupId: g.id },
+        update: {},
+        create: {
+          groupId: g.id,
+          enableFairDistribution: true,
+          fairDistributionTarget: g.id === 'group-night' ? 'NIGHT' : 'ALL',
+        },
+      });
+    }
+    console.log('Group shift configs created');
+  } catch {
+    console.log('Group shift configs skipped (run migration first)');
+  }
+
+  // Default ShiftRules
+  const shiftRules = [
+    { ruleType: 'MAX_CONSECUTIVE_WORK_DAYS', value: 5, description: '最大連続勤務日数', isActive: true },
+    { ruleType: 'MAX_NIGHT_SHIFTS_PER_MONTH', value: 8, description: '月最大夜勤回数', isActive: true },
+    { ruleType: 'MAX_CONSECUTIVE_NIGHT', value: 2, description: '最大連続夜勤回数', isActive: true },
+    { ruleType: 'MIN_SKILLED_PER_SHIFT', value: 1, description: '1シフトあたり最低スキル者数', isActive: true },
+  ];
+  for (const rule of shiftRules) {
+    await prisma.shiftRule.upsert({
+      where: { ruleType: rule.ruleType },
       update: {},
-      create: {
-        groupId: g.id,
-        enableFairDistribution: true,
-        fairDistributionTarget: g.id === 'group-night' ? 'NIGHT' : 'ALL',
-      },
+      create: rule,
     });
   }
-  console.log('Group shift configs created');
+  console.log('Shift rules created');
+
+  // Default ShiftRequirements (全グループ共通・全日)
+  const defaultRequirements = [
+    { shiftTypeId: 'shift-type-1', minStaff: 3, maxStaff: 6 }, // 日勤
+    { shiftTypeId: 'shift-type-2', minStaff: 2, maxStaff: 4 }, // 夜勤
+    { shiftTypeId: 'shift-type-3', minStaff: 2, maxStaff: 4 }, // 早番
+    { shiftTypeId: 'shift-type-4', minStaff: 2, maxStaff: 4 }, // 遅番
+  ];
+  let reqIdx = 1;
+  for (const req of defaultRequirements) {
+    await prisma.shiftRequirement.upsert({
+      where: { id: `req-default-${reqIdx}` },
+      update: {},
+      create: {
+        id: `req-default-${reqIdx}`,
+        shiftTypeId: req.shiftTypeId,
+        dayOfWeek: null,
+        dateType: 'ALL',
+        minStaff: req.minStaff,
+        maxStaff: req.maxStaff,
+        groupId: null,
+        isActive: true,
+      },
+    });
+    reqIdx++;
+  }
+  console.log('Default shift requirements created');
 
   console.log('Seed completed successfully!');
 }

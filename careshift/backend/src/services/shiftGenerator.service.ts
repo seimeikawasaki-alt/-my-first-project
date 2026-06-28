@@ -80,11 +80,15 @@ export async function generateShifts(params: {
   const ruleMap: Record<string, number> = {};
   rules.forEach(r => { ruleMap[r.ruleType] = r.value; });
 
-  // Load group config (overrides global rules)
+  // Load group config (overrides global rules; non-fatal if table doesn't exist)
   let groupConfig: { maxConsecutive: number | null; maxNightPerMonth: number | null; enableFairDistribution: boolean; fairDistributionTarget: string } | null = null;
   if (groupId) {
-    const gc = await (prisma as unknown as { groupShiftConfig: { findUnique: (args: object) => Promise<unknown> } }).groupShiftConfig.findUnique({ where: { groupId } });
-    if (gc) groupConfig = gc as typeof groupConfig;
+    try {
+      const gc = await (prisma as unknown as { groupShiftConfig: { findUnique: (args: object) => Promise<unknown> } }).groupShiftConfig.findUnique({ where: { groupId } });
+      if (gc) groupConfig = gc as typeof groupConfig;
+    } catch {
+      // ignore if table doesn't exist yet
+    }
   }
 
   const maxConsecutive = groupConfig?.maxConsecutive ?? ruleMap['MAX_CONSECUTIVE_WORK_DAYS'] ?? 5;
@@ -332,25 +336,29 @@ export async function generateShifts(params: {
     ? Math.min(1, generatedShifts.length / totalRequiredSlots)
     : 1;
 
-  // Save StaffShiftStats
-  for (const staff of staffStates) {
-    if (staff.workDays === 0) continue;
-    await (prisma as unknown as { staffShiftStats: { upsert: (args: object) => Promise<unknown> } }).staffShiftStats.upsert({
-      where: { userId_year_month: { userId: staff.id, year, month } },
-      update: {
-        nightCount: staff.nightShifts,
-        earlyCount: staff.earlyShiftCount,
-        totalWorkDays: staff.workDays,
-      },
-      create: {
-        userId: staff.id,
-        year,
-        month,
-        nightCount: staff.nightShifts,
-        earlyCount: staff.earlyShiftCount,
-        totalWorkDays: staff.workDays,
-      },
-    });
+  // Save StaffShiftStats (non-fatal: may not exist if migration hasn't run)
+  try {
+    for (const staff of staffStates) {
+      if (staff.workDays === 0) continue;
+      await (prisma as unknown as { staffShiftStats: { upsert: (args: object) => Promise<unknown> } }).staffShiftStats.upsert({
+        where: { userId_year_month: { userId: staff.id, year, month } },
+        update: {
+          nightCount: staff.nightShifts,
+          earlyCount: staff.earlyShiftCount,
+          totalWorkDays: staff.workDays,
+        },
+        create: {
+          userId: staff.id,
+          year,
+          month,
+          nightCount: staff.nightShifts,
+          earlyCount: staff.earlyShiftCount,
+          totalWorkDays: staff.workDays,
+        },
+      });
+    }
+  } catch {
+    // ignore if table doesn't exist yet
   }
 
   await prisma.shiftGenerationLog.create({
