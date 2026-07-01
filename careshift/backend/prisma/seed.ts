@@ -84,7 +84,13 @@ function getEmploymentType(indexInGroup: number): string {
 async function main() {
   console.log('Seeding database...');
 
+  // Reset all group memberships so each staff belongs to exactly one group
+  // (removes stale/duplicate memberships from earlier seeds or manual edits that
+  //  otherwise cause a staff to be generated in several groups → over-work)
+  await prisma.userGroup.deleteMany({});
+
   // Upsert groups
+  const groupIds = GROUPS.map(g => g.id);
   for (const g of GROUPS) {
     await prisma.group.upsert({
       where: { id: g.id },
@@ -92,6 +98,8 @@ async function main() {
       create: { id: g.id, name: g.name, color: g.color, description: g.description, isActive: true },
     });
   }
+  // Remove groups left over from previous seeds so generation only targets these 5
+  await prisma.group.deleteMany({ where: { id: { notIn: groupIds } } });
   console.log('Groups created:', GROUPS.map(g => g.name).join(', '));
 
   const saltRounds = 12;

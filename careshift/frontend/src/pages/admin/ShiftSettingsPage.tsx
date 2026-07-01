@@ -141,7 +141,7 @@ export default function ShiftSettingsPage() {
   if (loading) return <div className="p-8 text-center text-subtext">読み込み中...</div>;
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-6 max-w-6xl">
       <h1 className="text-heading font-bold text-text mb-6">シフト設定</h1>
 
       {/* Tabs */}
@@ -167,19 +167,20 @@ export default function ShiftSettingsPage() {
       {/* Requirements Tab */}
       {tab === 'requirements' && (
         <div>
-          <p className="text-sub text-subtext mb-4">各シフト種別・曜日ごとの必要人数を設定します。「全日」は曜日指定がない場合のデフォルトです。</p>
+          <p className="text-sub text-subtext mb-1">各シフト種別・曜日ごとの<span className="font-semibold text-text">必要人数</span>を設定します。</p>
+          <p className="text-xs text-subtext mb-5">「全日」は曜日ごとの指定がない場合の既定値です。曜日欄を設定するとその曜日だけ上書きされます。空欄はその区分の要件なし。</p>
 
           {shiftTypes.length === 0 ? (
             <p className="text-center text-subtext py-8">アクティブなシフト種別がありません。先にシフト種別を登録してください。</p>
           ) : (
-            <div className="overflow-auto">
-              <table className="text-xs border-collapse bg-white border border-border rounded-lg" style={{ minWidth: '600px' }}>
+            <div className="overflow-x-auto pb-2">
+              <table className="border-collapse bg-white border border-border rounded-xl overflow-hidden" style={{ minWidth: '960px' }}>
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="border border-border px-3 py-2 text-left text-subtext font-medium min-w-28">シフト種別</th>
-                    <th className="border border-border px-2 py-2 text-center text-subtext font-medium w-20">全日</th>
+                    <th className="border border-border px-4 py-3 text-left text-sub text-subtext font-semibold sticky left-0 bg-gray-50 z-10" style={{ minWidth: '120px' }}>シフト種別</th>
+                    <th className="border border-border px-2 py-3 text-center text-sub font-semibold text-text bg-blue-50" style={{ width: '110px' }}>全日</th>
                     {DAYS_JA.map((d, i) => (
-                      <th key={i} className={`border border-border px-2 py-2 text-center font-medium w-20 ${i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-subtext'}`}>
+                      <th key={i} className={`border border-border px-2 py-3 text-center text-sub font-semibold ${i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-subtext'}`} style={{ width: '96px' }}>
                         {d}
                       </th>
                     ))}
@@ -187,46 +188,60 @@ export default function ShiftSettingsPage() {
                 </thead>
                 <tbody>
                   {shiftTypes.map(st => (
-                    <tr key={st.id} className="hover:bg-gray-50">
-                      <td className="border border-border px-3 py-2 font-medium text-text">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: st.color ?? '#94A3B8' }} />
-                          {st.name}
+                    <tr key={st.id} className="hover:bg-gray-50/50">
+                      <td className="border border-border px-4 py-3 font-semibold text-text sticky left-0 bg-white z-10">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: st.color ?? '#94A3B8' }} />
+                          <span className="text-base">{st.name}</span>
                         </span>
                       </td>
                       {(['all', 0, 1, 2, 3, 4, 5, 6] as const).map(day => {
                         const req = getReq(st.id, day);
+                        const isAll = day === 'all';
                         return (
-                          <td key={String(day)} className="border border-border p-1 text-center align-top">
+                          <td key={String(day)} className={`border border-border p-2 text-center align-middle ${isAll ? 'bg-blue-50/40' : ''}`}>
                             {req != null ? (
-                              <div className="flex flex-col gap-0.5 items-center py-1">
-                                <div className="flex items-center gap-0.5">
-                                  <span className="text-subtext" style={{ fontSize: '10px' }}>必要</span>
+                              <div className="flex flex-col items-center gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setReq(st.id, day, req - 1)}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 active:scale-95 text-lg font-bold text-text leading-none transition"
+                                    aria-label="減らす"
+                                  >
+                                    −
+                                  </button>
                                   <input
                                     type="number"
                                     value={req}
                                     min={0}
                                     max={20}
                                     onChange={e => setReq(st.id, day, parseInt(e.target.value) || 0)}
-                                    className="w-10 border border-border rounded px-1 py-0.5 text-center"
-                                    style={{ fontSize: '11px' }}
+                                    className="w-11 h-9 border border-border rounded-lg text-center text-lg font-bold text-text focus:border-primary focus:ring-1 focus:ring-primary outline-none"
                                   />
+                                  <button
+                                    type="button"
+                                    onClick={() => setReq(st.id, day, req + 1)}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-primary/10 hover:bg-primary/20 active:scale-95 text-lg font-bold text-primary leading-none transition"
+                                    aria-label="増やす"
+                                  >
+                                    ＋
+                                  </button>
                                 </div>
                                 <button
                                   onClick={() => clearReq(st.id, day)}
-                                  className="text-danger hover:underline mt-0.5"
-                                  style={{ fontSize: '10px' }}
+                                  className="text-danger hover:underline"
+                                  style={{ fontSize: '11px' }}
                                 >
-                                  削除
+                                  クリア
                                 </button>
                               </div>
                             ) : (
                               <button
                                 onClick={() => addReq(st.id, day)}
-                                className="text-primary hover:underline px-2 py-2"
-                                style={{ fontSize: '11px' }}
+                                className="w-full py-3 rounded-lg text-primary text-sub font-medium hover:bg-primary/5 border border-dashed border-border hover:border-primary/40 transition"
                               >
-                                + 設定
+                                ＋設定
                               </button>
                             )}
                           </td>
@@ -239,7 +254,7 @@ export default function ShiftSettingsPage() {
             </div>
           )}
 
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-6 flex items-center gap-3">
             <button onClick={saveRequirements} disabled={saving} className="btn-primary">
               {saving ? '保存中...' : '要件を保存'}
             </button>

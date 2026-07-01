@@ -45,6 +45,9 @@ interface StaffState {
   earlyShiftCount: number;
   consecutiveWorkDays: number;
   lastWorkDate: string | null;
+  // Consecutive night-shift tracking
+  consecutiveNights: number;
+  lastNightDate: string | null;
   assignedDates: Set<string>;
 }
 
@@ -183,6 +186,9 @@ export async function generateShifts(params: {
   const generatedShifts: Array<{ userId: string; shiftTypeId: string; shiftDate: Date; status: string; createdBy: string }> = [];
   let totalRequiredSlots = 0;
   const allStaffStates: StaffState[] = [];
+  // Ensure each staff is generated in only one group even if they belong to
+  // several (stale/duplicate memberships) — prevents over-work across groups
+  const processedStaff = new Set<string>();
 
   // ---- Generate per group ----
   for (const gid of targetGroupIds) {
@@ -205,11 +211,12 @@ export async function generateShifts(params: {
     const enableFairDistribution = groupConfig?.enableFairDistribution ?? true;
     const fairTarget = groupConfig?.fairDistributionTarget ?? 'ALL';
 
-    // Group staff
+    // Group staff (skip any already generated in an earlier group)
     const gStaffIds = groupMembers
-      .filter((m: { userId: string; groupId: string }) => m.groupId === gid && activeStaffSet.has(m.userId))
+      .filter((m: { userId: string; groupId: string }) => m.groupId === gid && activeStaffSet.has(m.userId) && !processedStaff.has(m.userId))
       .map((m: { userId: string }) => m.userId);
     if (gStaffIds.length === 0) continue;
+    gStaffIds.forEach((id: string) => processedStaff.add(id));
 
     // Group requirements (fall back to global defaults if none defined)
     let gReqs = allRequirements.filter(r => r.groupId === gid);
@@ -248,6 +255,8 @@ export async function generateShifts(params: {
         earlyShiftCount: 0,
         consecutiveWorkDays: 0,
         lastWorkDate: null,
+        consecutiveNights: 0,
+        lastNightDate: null,
         assignedDates: new Set(),
       };
     });
@@ -256,6 +265,7 @@ export async function generateShifts(params: {
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(Date.UTC(year, month - 1, day));
       const dk = dateKey(date);
+      const prevDk = dateKey(addUTCDays(date, -1));
       const dayOfWeek = date.getUTCDay();
 
       const dayReqs = getDayRequirements(gReqs, dayOfWeek, shiftTypes);
@@ -286,6 +296,8 @@ export async function generateShifts(params: {
           if (!staff.canWorkNight && isNight) return false;
           if (isNight && staff.nightShifts >= maxNightPerMonth) return false;
           if (staff.maxNightShifts !== null && isNight && staff.nightShifts >= staff.maxNightShifts) return false;
+          // Cap consecutive night shifts
+          if (isNight && staff.lastNightDate === prevDk && staff.consecutiveNights >= maxConsecutiveNight) return false;
           if (staff.maxWorkDaysPerMonth !== null && staff.workDays >= staff.maxWorkDaysPerMonth) return false;
           if (staff.consecutiveWorkDays >= maxConsecutive) return false;
           if (staff.availableDays !== null && !staff.availableDays.includes(dayOfWeek)) return false;
@@ -327,9 +339,10 @@ export async function generateShifts(params: {
           assigned.push(staff);
         }
 
-        // Skill shortage warning
+        // Skill shortage warning (only for shifts that need 2+ staff; a solo shift
+        // doesn't require a dedicated senior, which otherwise floods the warnings)
         const assignedSkilled = assigned.filter(s => skillLevels.has(s.skillLevel)).length;
-        if (minSkilledPerShift && assigned.length > 0 && assignedSkilled < minSkilledPerShift) {
+        if (minSkilledPerShift && required >= 2 && assigned.length > 0 && assignedSkilled < minSkilledPerShift) {
           warnings.push({ type: 'SKILL_SHORTAGE', date: dk, shiftTypeName: shiftType.name, message: `${dk} ${shiftType.name}: 有資格者が不足しています`, severity: 'MEDIUM' });
         }
 
@@ -346,6 +359,9 @@ export async function generateShifts(params: {
           staff.workDays++;
           if (isNight) {
             staff.nightShifts++;
+            // Track consecutive nights
+            staff.consecutiveNights = staff.lastNightDate === prevDk ? staff.consecutiveNights + 1 : 1;
+            staff.lastNightDate = dk;
             // Block next N calendar days after a night shift (MIN_REST_AFTER_NIGHT)
             for (let r = 1; r <= nightRestBlockDays; r++) {
               const restDk = dateKey(addUTCDays(date, r));
@@ -370,8 +386,8 @@ export async function generateShifts(params: {
           if (staff.consecutiveWorkDays > maxConsecutive) {
             warnings.push({ type: 'OVER_CONSECUTIVE', date: dk, shiftTypeName: shiftType.name, message: `スタッフ${staff.id.slice(0, 6)}: 連続勤務${staff.consecutiveWorkDays}日`, severity: 'MEDIUM' });
           }
-          if (isNight && staff.nightShifts > maxConsecutiveNight) {
-            warnings.push({ type: 'NIGHT_LIMIT', date: dk, shiftTypeName: shiftType.name, message: `スタッフ${staff.id.slice(0, 6)}: 連続夜勤${staff.nightShifts}回`, severity: 'LOW' });
+          if (isNight && staff.consecutiveNights > maxConsecutiveNight) {
+            warnings.push({ type: 'NIGHT_LIMIT', date: dk, shiftTypeName: shiftType.name, message: `スタッフ${staff.id.slice(0, 6)}: 連続夜勤${staff.consecutiveNights}回`, severity: 'LOW' });
           }
         }
       }
