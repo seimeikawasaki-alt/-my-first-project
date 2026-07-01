@@ -10,8 +10,7 @@ export async function createShiftRequirement(data: {
   shiftTypeId: string;
   dayOfWeek?: number | null;
   dateType?: string;
-  minStaff: number;
-  maxStaff?: number | null;
+  requiredStaff: number;
   groupId?: string | null;
   isActive?: boolean;
 }) {
@@ -23,8 +22,7 @@ export async function updateShiftRequirement(id: string, data: Partial<{
   shiftTypeId: string;
   dayOfWeek: number | null;
   dateType: string;
-  minStaff: number;
-  maxStaff: number | null;
+  requiredStaff: number;
   groupId: string | null;
   isActive: boolean;
 }>) {
@@ -41,8 +39,7 @@ export async function bulkUpsertShiftRequirements(requirements: Array<{
   shiftTypeId: string;
   dayOfWeek?: number | null;
   dateType?: string;
-  minStaff: number;
-  maxStaff?: number | null;
+  requiredStaff: number;
   groupId?: string | null;
   isActive?: boolean;
 }>) {

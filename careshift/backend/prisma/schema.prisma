@@ -145,15 +145,14 @@ model ShiftRequest {
 }
 
 model ShiftRequirement {
-  id          String   @id @default(uuid())
-  shiftTypeId String
-  dayOfWeek   Int?
-  dateType    String   @default("ALL")
-  minStaff    Int      @default(1)
-  maxStaff    Int?
-  groupId     String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id            String   @id @default(uuid())
+  shiftTypeId   String
+  dayOfWeek     Int?
+  dateType      String   @default("ALL")
+  requiredStaff Int      @default(1)
+  groupId       String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
 }
 
 model ShiftRule {

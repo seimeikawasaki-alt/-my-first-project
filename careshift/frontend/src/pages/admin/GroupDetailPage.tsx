@@ -31,7 +31,7 @@ export default function GroupDetailPage() {
   const [infoSaving, setInfoSaving] = useState(false);
   const [infoMsg, setInfoMsg] = useState('');
 
-  // Requirements tab state (shiftTypeId|dayOfWeek → minStaff)
+  // Requirements tab state (shiftTypeId|dayOfWeek → requiredStaff)
   const [reqGrid, setReqGrid] = useState<Map<string, number>>(new Map());
   const [reqSaving, setReqSaving] = useState(false);
   const [reqMsg, setReqMsg] = useState('');
@@ -84,7 +84,7 @@ export default function GroupDetailPage() {
       const grid = new Map<string, number>();
       for (const r of reqRes.data) {
         const key = `${r.shiftTypeId}|${r.dayOfWeek ?? 'all'}`;
-        grid.set(key, r.minStaff);
+        grid.set(key, r.requiredStaff);
       }
       setReqGrid(grid);
 
@@ -116,14 +116,14 @@ export default function GroupDetailPage() {
     setReqSaving(true);
     setReqMsg('');
     try {
-      const entries: Array<{ shiftTypeId: string; dayOfWeek: number | null; minStaff: number; groupId: string; isActive: boolean }> = [];
-      for (const [key, minStaff] of reqGrid.entries()) {
-        if (minStaff <= 0) continue;
+      const entries: Array<{ shiftTypeId: string; dayOfWeek: number | null; requiredStaff: number; groupId: string; isActive: boolean }> = [];
+      for (const [key, requiredStaff] of reqGrid.entries()) {
+        if (requiredStaff <= 0) continue;
         const sepIdx = key.indexOf('|');
         const shiftTypeId = key.slice(0, sepIdx);
         const dayPart = key.slice(sepIdx + 1);
         const dayOfWeek = dayPart === 'all' ? null : parseInt(dayPart);
-        entries.push({ shiftTypeId, dayOfWeek, minStaff, groupId: id, isActive: true });
+        entries.push({ shiftTypeId, dayOfWeek, requiredStaff, groupId: id, isActive: true });
       }
       // Remove existing group-specific requirements, then bulk upsert
       for (const req of requirements.filter(r => r.groupId === id)) {

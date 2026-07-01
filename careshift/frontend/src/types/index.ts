@@ -157,8 +157,7 @@ export interface ShiftRequirement {
   shiftTypeId: string;
   dayOfWeek?: number | null;
   dateType: 'ALL' | 'WEEKDAY' | 'WEEKEND' | 'HOLIDAY';
-  minStaff: number;
-  maxStaff?: number | null;
+  requiredStaff: number;
   groupId?: string | null;
   isActive: boolean;
   createdAt?: string;

@@ -11,8 +11,7 @@ const requirementSchema = z.object({
   shiftTypeId: z.string().min(1),
   dayOfWeek: z.number().int().min(0).max(6).optional().nullable(),
   dateType: z.enum(['ALL', 'WEEKDAY', 'WEEKEND', 'HOLIDAY']).optional(),
-  minStaff: z.number().int().min(0),
-  maxStaff: z.number().int().min(0).optional().nullable(),
+  requiredStaff: z.number().int().min(0),
   groupId: z.string().optional().nullable(),
   isActive: z.boolean().optional(),
 });

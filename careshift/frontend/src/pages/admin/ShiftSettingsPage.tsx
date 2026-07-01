@@ -31,7 +31,7 @@ export default function ShiftSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const [reqGrid, setReqGrid] = useState<Map<string, { min: number; max: number }>>(new Map());
+  const [reqGrid, setReqGrid] = useState<Map<string, number>>(new Map());
   const [ruleValues, setRuleValues] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
@@ -45,10 +45,10 @@ export default function ShiftSettingsPage() {
       setShiftTypes(typesRes.data.filter(t => t.isActive));
       setRules(rulesRes.data);
 
-      const grid = new Map<string, { min: number; max: number }>();
+      const grid = new Map<string, number>();
       reqsRes.data.forEach(r => {
         const key = makeKey(r.shiftTypeId, r.dayOfWeek ?? 'all');
-        grid.set(key, { min: r.minStaff, max: r.maxStaff ?? r.minStaff + 3 });
+        grid.set(key, r.requiredStaff);
       });
       setReqGrid(grid);
 
@@ -62,15 +62,15 @@ export default function ShiftSettingsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const getReq = (shiftTypeId: string, day: number | 'all') =>
-    reqGrid.get(makeKey(shiftTypeId, day)) ?? null;
+  const getReq = (shiftTypeId: string, day: number | 'all'): number | null => {
+    const v = reqGrid.get(makeKey(shiftTypeId, day));
+    return v == null ? null : v;
+  };
 
-  const setReq = (shiftTypeId: string, day: number | 'all', field: 'min' | 'max', value: number) => {
+  const setReq = (shiftTypeId: string, day: number | 'all', value: number) => {
     setReqGrid(prev => {
-      const key = makeKey(shiftTypeId, day);
-      const existing = prev.get(key) ?? { min: 1, max: 4 };
       const updated = new Map(prev);
-      updated.set(key, { ...existing, [field]: Math.max(0, value) });
+      updated.set(makeKey(shiftTypeId, day), Math.max(0, value));
       return updated;
     });
   };
@@ -80,7 +80,7 @@ export default function ShiftSettingsPage() {
       const key = makeKey(shiftTypeId, day);
       if (prev.has(key)) return prev;
       const updated = new Map(prev);
-      updated.set(key, { min: 1, max: 4 });
+      updated.set(key, 1);
       return updated;
     });
   };
@@ -99,17 +99,17 @@ export default function ShiftSettingsPage() {
       const data: Array<{
         shiftTypeId: string;
         dayOfWeek: number | null;
-        minStaff: number;
-        maxStaff: number;
+        requiredStaff: number;
         isActive: boolean;
       }> = [];
 
       reqGrid.forEach((val, key) => {
+        if (val <= 0) return;
         const pipeIdx = key.indexOf('|');
         const shiftTypeId = key.slice(0, pipeIdx);
         const dayPart = key.slice(pipeIdx + 1);
         const dayOfWeek = dayPart === 'all' ? null : parseInt(dayPart);
-        data.push({ shiftTypeId, dayOfWeek, minStaff: val.min, maxStaff: val.max, isActive: true });
+        data.push({ shiftTypeId, dayOfWeek, requiredStaff: val, isActive: true });
       });
 
       if (data.length > 0) {
@@ -198,28 +198,16 @@ export default function ShiftSettingsPage() {
                         const req = getReq(st.id, day);
                         return (
                           <td key={String(day)} className="border border-border p-1 text-center align-top">
-                            {req ? (
+                            {req != null ? (
                               <div className="flex flex-col gap-0.5 items-center py-1">
                                 <div className="flex items-center gap-0.5">
-                                  <span className="text-subtext" style={{ fontSize: '10px' }}>最小</span>
+                                  <span className="text-subtext" style={{ fontSize: '10px' }}>必要</span>
                                   <input
                                     type="number"
-                                    value={req.min}
+                                    value={req}
                                     min={0}
                                     max={20}
-                                    onChange={e => setReq(st.id, day, 'min', parseInt(e.target.value) || 0)}
-                                    className="w-10 border border-border rounded px-1 py-0.5 text-center"
-                                    style={{ fontSize: '11px' }}
-                                  />
-                                </div>
-                                <div className="flex items-center gap-0.5">
-                                  <span className="text-subtext" style={{ fontSize: '10px' }}>最大</span>
-                                  <input
-                                    type="number"
-                                    value={req.max}
-                                    min={0}
-                                    max={20}
-                                    onChange={e => setReq(st.id, day, 'max', parseInt(e.target.value) || 0)}
+                                    onChange={e => setReq(st.id, day, parseInt(e.target.value) || 0)}
                                     className="w-10 border border-border rounded px-1 py-0.5 text-center"
                                     style={{ fontSize: '11px' }}
                                   />

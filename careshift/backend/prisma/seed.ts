@@ -237,6 +237,8 @@ async function main() {
           groupId: g.id,
           enableFairDistribution: true,
           fairDistributionTarget: g.id === 'group-night' ? 'NIGHT' : 'ALL',
+          // 夜勤専従グループは夜勤上限を引き上げる
+          maxNightPerMonth: g.id === 'group-night' ? 20 : null,
         },
       });
     }
@@ -263,32 +265,43 @@ async function main() {
   }
   console.log('Shift rules created');
 
-  // Default ShiftRequirements (全グループ共通・全日)
-  const defaultRequirements = [
-    { shiftTypeId: 'shift-type-1', minStaff: 3, maxStaff: 6 }, // 日勤
-    { shiftTypeId: 'shift-type-2', minStaff: 2, maxStaff: 4 }, // 夜勤
-    { shiftTypeId: 'shift-type-3', minStaff: 2, maxStaff: 4 }, // 早番
-    { shiftTypeId: 'shift-type-4', minStaff: 2, maxStaff: 4 }, // 遅番
-  ];
-  let reqIdx = 1;
-  for (const req of defaultRequirements) {
-    await prisma.shiftRequirement.upsert({
-      where: { id: `req-default-${reqIdx}` },
-      update: {},
-      create: {
-        id: `req-default-${reqIdx}`,
-        shiftTypeId: req.shiftTypeId,
-        dayOfWeek: null,
-        dateType: 'ALL',
-        minStaff: req.minStaff,
-        maxStaff: req.maxStaff,
-        groupId: null,
-        isActive: true,
-      },
-    });
-    reqIdx++;
+  // Per-group ShiftRequirements (全日・単一の必要人数)
+  // 通常グループ（10名）: 日勤3 / 早番1 / 遅番1 / 夜勤1 = 6枠/日 → 1人あたり約18日/月
+  const regularReq: Record<string, number> = {
+    'shift-type-1': 3, // 日勤
+    'shift-type-2': 1, // 夜勤
+    'shift-type-3': 1, // 早番
+    'shift-type-4': 1, // 遅番
+  };
+  // 夜勤専従グループ（10名）: 夜勤中心
+  const nightReq: Record<string, number> = {
+    'shift-type-1': 0, // 日勤
+    'shift-type-2': 3, // 夜勤
+    'shift-type-3': 0, // 早番
+    'shift-type-4': 0, // 遅番
+  };
+
+  for (const g of GROUPS) {
+    const reqSet = g.id === 'group-night' ? nightReq : regularReq;
+    for (const [shiftTypeId, requiredStaff] of Object.entries(reqSet)) {
+      if (requiredStaff <= 0) continue;
+      const reqId = `req-${g.id}-${shiftTypeId}`;
+      await prisma.shiftRequirement.upsert({
+        where: { id: reqId },
+        update: { requiredStaff },
+        create: {
+          id: reqId,
+          shiftTypeId,
+          dayOfWeek: null,
+          dateType: 'ALL',
+          requiredStaff,
+          groupId: g.id,
+          isActive: true,
+        },
+      });
+    }
   }
-  console.log('Default shift requirements created');
+  console.log('Per-group shift requirements created');
 
   console.log('Seed completed successfully!');
 }
