@@ -14,6 +14,7 @@ import SettingsPage from './pages/admin/SettingsPage';
 import ShiftsPage from './pages/admin/ShiftsPage';
 import AttendancePage from './pages/admin/AttendancePage';
 import ShiftSettingsPage from './pages/admin/ShiftSettingsPage';
+import ShiftRequestsPage from './pages/admin/ShiftRequestsPage';
 import GroupDetailPage from './pages/admin/GroupDetailPage';
 import StaffDashboardPage from './pages/staff/StaffDashboardPage';
 import PunchPage from './pages/staff/PunchPage';
@@ -89,6 +90,7 @@ export default function App() {
           <Route path="attendance/:year/:month" element={<AttendancePage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="shift-settings" element={<ShiftSettingsPage />} />
+          <Route path="shift-requests" element={<ShiftRequestsPage />} />
           <Route path="groups/:id" element={<GroupDetailPage />} />
           <Route
             path="salary/:year/:month"

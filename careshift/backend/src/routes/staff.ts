@@ -32,6 +32,7 @@ const staffCreateSchema = z.object({
 
 const staffUpdateSchema = staffCreateSchema.omit({ password: true }).extend({
   password: z.string().min(8).optional(),
+  isActive: z.boolean().optional(),
 });
 
 // GET /api/v1/staff
@@ -41,9 +42,12 @@ router.get('/', authenticate, authorize('ADMIN'), async (req: Request, res: Resp
   const search = req.query.search as string | undefined;
   const employmentType = req.query.employment_type as string | undefined;
   const groupId = req.query.group_id as string | undefined;
-  const isActive = req.query.is_active !== 'false';
+  const isActiveParam = req.query.is_active as string | undefined;
 
-  const where: Record<string, unknown> = { isActive };
+  const where: Record<string, unknown> = {};
+  if (isActiveParam !== 'all') {
+    where.isActive = isActiveParam !== 'false';
+  }
 
   if (search) {
     where.OR = [

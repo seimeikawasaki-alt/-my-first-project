@@ -11,6 +11,7 @@ const navItems = [
   { label: 'グループ管理', icon: '👪', to: '/admin/groups' },
   { label: 'シフト管理', icon: '📅', to: `/admin/shifts/${year}/${month}` },
   { label: 'シフト設定', icon: '🔧', to: '/admin/shift-settings' },
+  { label: 'シフト申請一覧', icon: '📝', to: '/admin/shift-requests' },
   { label: '勤怠管理', icon: '⏰', to: `/admin/attendance/${year}/${month}` },
   { label: '給与管理', icon: '💴', to: `/admin/salary/${year}/${month}` },
   { label: '設定', icon: '⚙️', to: '/admin/settings' },

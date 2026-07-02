@@ -33,6 +33,7 @@ const initialForm: StaffCreateRequest = {
   phone: null,
   hireDate: null,
   groupIds: [],
+  isActive: true,
 };
 
 const DAYS_JA = ['日', '月', '火', '水', '木', '金', '土'];
@@ -57,6 +58,7 @@ export default function StaffFormPage() {
   const [globalError, setGlobalError] = useState('');
   const [isLoading, setIsLoading] = useState(!isNew);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTogglingActive, setIsTogglingActive] = useState(false);
 
   // Constraint state
   const [constraint, setConstraint] = useState<Partial<StaffConstraint>>({
@@ -100,6 +102,7 @@ export default function StaffFormPage() {
           phone: user.phone || null,
           hireDate: user.hireDate ? user.hireDate.slice(0, 10) : null,
           groupIds: user.groups?.map((g: { id: string }) => g.id) || [],
+          isActive: user.isActive,
         });
         const c = constraintRes.data;
         if (c) {
@@ -204,6 +207,28 @@ export default function StaffFormPage() {
     }
   };
 
+  const handleToggleActive = async () => {
+    if (!id || isNew) return;
+    const nextActive = !form.isActive;
+    const label = nextActive ? '有効化' : '無効化';
+    if (!window.confirm(`${form.lastName} ${form.firstName}さんを${label}しますか？`)) return;
+    setIsTogglingActive(true);
+    try {
+      const submitData = {
+        ...form,
+        hourlyWage: form.hourlyWage || null,
+        monthlySalary: form.monthlySalary || null,
+        isActive: nextActive,
+      };
+      await staffApi.update(id, submitData);
+      setForm(prev => ({ ...prev, isActive: nextActive }));
+    } catch {
+      alert(`${label}に失敗しました`);
+    } finally {
+      setIsTogglingActive(false);
+    }
+  };
+
   const handleConstraintSave = async () => {
     if (!id || isNew) return;
     setConstraintSaving(true);
@@ -235,9 +260,26 @@ export default function StaffFormPage() {
         <button onClick={() => navigate('/admin/staff')} className="text-subtext hover:text-text text-sub mb-2 flex items-center gap-1">
           ← スタッフ一覧に戻る
         </button>
-        <h1 className="text-heading font-bold text-text">
-          {isNew ? 'スタッフ登録' : 'スタッフ編集'}
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-heading font-bold text-text">
+            {isNew ? 'スタッフ登録' : 'スタッフ編集'}
+          </h1>
+          {!isNew && (
+            <div className="flex items-center gap-3">
+              <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${form.isActive ? 'bg-green-100 text-success' : 'bg-gray-200 text-subtext'}`}>
+                {form.isActive ? '有効' : '無効化済み'}
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleActive}
+                disabled={isTogglingActive}
+                className={`text-sub hover:underline disabled:opacity-50 ${form.isActive ? 'text-danger' : 'text-primary'}`}
+              >
+                {isTogglingActive ? '処理中...' : form.isActive ? '無効化する' : '有効化する'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tabs (edit mode only) */}

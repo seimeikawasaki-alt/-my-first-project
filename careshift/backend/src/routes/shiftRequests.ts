@@ -30,8 +30,12 @@ router.get('/my', authenticate, async (req: Request, res: Response): Promise<voi
 });
 
 // GET /api/v1/shift-requests
-router.get('/', authenticate, authorize('ADMIN'), async (_req: Request, res: Response): Promise<void> => {
+router.get('/', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+  const status = req.query.status as string | undefined;
+  const where = status ? { status } : {};
+
   const requests = await prisma.shiftRequest.findMany({
+    where,
     orderBy: { createdAt: 'desc' },
   });
 

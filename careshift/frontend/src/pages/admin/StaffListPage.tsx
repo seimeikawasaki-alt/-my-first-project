@@ -29,6 +29,7 @@ export default function StaffListPage() {
   const [search, setSearch] = useState('');
   const [employmentType, setEmploymentType] = useState('');
   const [groupId, setGroupId] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active');
   const [searchInput, setSearchInput] = useState('');
 
   const perPage = 20;
@@ -42,13 +43,14 @@ export default function StaffListPage() {
         search: search || undefined,
         employment_type: employmentType || undefined,
         group_id: groupId || undefined,
+        is_active: activeFilter === 'all' ? 'all' : activeFilter === 'active' ? 'true' : 'false',
       });
       setStaff(res.data.data);
       setTotal(res.data.meta?.total ?? 0);
     } finally {
       setIsLoading(false);
     }
-  }, [page, search, employmentType, groupId]);
+  }, [page, search, employmentType, groupId, activeFilter]);
 
   useEffect(() => {
     fetchStaff();
@@ -61,12 +63,6 @@ export default function StaffListPage() {
   const handleSearch = () => {
     setSearch(searchInput);
     setPage(1);
-  };
-
-  const handleDeactivate = async (id: string, name: string) => {
-    if (!window.confirm(`${name}さんを無効化しますか？`)) return;
-    await staffApi.deactivate(id);
-    fetchStaff();
   };
 
   const totalPages = Math.ceil(total / perPage);
@@ -120,9 +116,18 @@ export default function StaffListPage() {
               <option key={g.id} value={g.id}>{g.name}</option>
             ))}
           </select>
+          <select
+            value={activeFilter}
+            onChange={e => { setActiveFilter(e.target.value as 'active' | 'inactive' | 'all'); setPage(1); }}
+            className="form-input w-auto"
+          >
+            <option value="active">状態 : 有効のみ</option>
+            <option value="inactive">状態 : 無効のみ</option>
+            <option value="all">状態 : すべて</option>
+          </select>
           <button onClick={handleSearch} className="btn-primary">検索</button>
           <button
-            onClick={() => { setSearch(''); setSearchInput(''); setEmploymentType(''); setGroupId(''); setPage(1); }}
+            onClick={() => { setSearch(''); setSearchInput(''); setEmploymentType(''); setGroupId(''); setActiveFilter('active'); setPage(1); }}
             className="btn-secondary"
           >
             リセット
@@ -155,7 +160,12 @@ export default function StaffListPage() {
                   <tr key={s.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
                       <div>
-                        <p className="font-medium text-text">{s.lastName} {s.firstName}</p>
+                        <p className="font-medium text-text flex items-center gap-2">
+                          {s.lastName} {s.firstName}
+                          {!s.isActive && (
+                            <span className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-subtext">無効化済み</span>
+                          )}
+                        </p>
                         {(s.lastNameKana || s.firstNameKana) && (
                           <p className="text-xs text-subtext">{s.lastNameKana} {s.firstNameKana}</p>
                         )}
@@ -189,20 +199,12 @@ export default function StaffListPage() {
                       {s.hireDate ? new Date(s.hireDate).toLocaleDateString('ja-JP') : '—'}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => navigate(`/admin/staff/${s.id}`)}
-                          className="text-primary text-sub hover:underline"
-                        >
-                          編集
-                        </button>
-                        <button
-                          onClick={() => handleDeactivate(s.id, `${s.lastName} ${s.firstName}`)}
-                          className="text-danger text-sub hover:underline"
-                        >
-                          無効化
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => navigate(`/admin/staff/${s.id}`)}
+                        className="text-primary text-sub hover:underline"
+                      >
+                        編集
+                      </button>
                     </td>
                   </tr>
                 ))}

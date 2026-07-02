@@ -7,7 +7,7 @@ export interface StaffListParams {
   search?: string;
   employment_type?: string;
   group_id?: string;
-  is_active?: boolean;
+  is_active?: 'true' | 'false' | 'all';
 }
 
 export interface StaffCreateRequest {
@@ -25,6 +25,7 @@ export interface StaffCreateRequest {
   phone?: string | null;
   hireDate?: string | null;
   groupIds?: string[];
+  isActive?: boolean;
 }
 
 export interface StaffUpdateRequest extends Omit<StaffCreateRequest, 'password'> {
@@ -43,7 +44,4 @@ export const staffApi = {
 
   update: (id: string, data: StaffUpdateRequest) =>
     apiClient.put<ApiResponse<User>>(`/staff/${id}`, data),
-
-  deactivate: (id: string) =>
-    apiClient.delete<ApiResponse<{ message: string }>>(`/staff/${id}`),
 };
