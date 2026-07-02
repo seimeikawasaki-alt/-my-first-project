@@ -105,6 +105,24 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {/* Quick links */}
+        <div className="bg-white rounded-xl border border-border p-2">
+          <button
+            onClick={() => navigate('/staff/payslips')}
+            className="w-full flex items-center justify-between px-3 py-3 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <span className="flex items-center gap-3 text-sub text-text"><span className="text-lg">🧾</span>給与明細</span>
+            <span className="text-subtext">›</span>
+          </button>
+          <button
+            onClick={() => navigate('/staff/shift-request')}
+            className="w-full flex items-center justify-between px-3 py-3 rounded-lg hover:bg-gray-50 transition-colors border-t border-border"
+          >
+            <span className="flex items-center gap-3 text-sub text-text"><span className="text-lg">📝</span>シフト申請</span>
+            <span className="text-subtext">›</span>
+          </button>
+        </div>
+
         {/* Groups */}
         {user?.groups && user.groups.length > 0 && (
           <div className="bg-white rounded-xl border border-border p-5">

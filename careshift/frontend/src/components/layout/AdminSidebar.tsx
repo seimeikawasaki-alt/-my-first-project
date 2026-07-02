@@ -14,6 +14,7 @@ const navItems = [
   { label: 'シフト申請一覧', icon: '📝', to: '/admin/shift-requests' },
   { label: '勤怠管理', icon: '⏰', to: `/admin/attendance/${year}/${month}` },
   { label: '給与管理', icon: '💴', to: `/admin/salary/${year}/${month}` },
+  { label: '給与項目設定', icon: '🧾', to: '/admin/salary/settings' },
   { label: '設定', icon: '⚙️', to: '/admin/settings' },
 ];
 

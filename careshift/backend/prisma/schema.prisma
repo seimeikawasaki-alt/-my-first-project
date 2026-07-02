@@ -94,6 +94,7 @@ model Attendance {
 
 model SalaryItem {
   id          String   @id @default(uuid())
+  code        String?  @unique
   name        String
   itemType    String
   calcType    String
@@ -113,8 +114,14 @@ model Payroll {
   totalIncome    Decimal   @default(0)
   totalDeduction Decimal   @default(0)
   netPay         Decimal   @default(0)
+  workDays       Int       @default(0)
+  workMinutes    Int       @default(0)
+  overtimeMinutes Int      @default(0)
+  lateNightMinutes Int     @default(0)
   confirmedAt    DateTime?
   confirmedBy    String?
+  modifiedBy     String?
+  modifyReason   String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

@@ -248,3 +248,52 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
 }
+
+// ---- Payroll (Phase 3) ----------------------------------------------------
+
+export type SalaryItemType = 'INCOME' | 'DEDUCTION';
+export type CalcType = 'AUTO' | 'MANUAL' | 'FIXED' | 'HOURLY';
+export type PayrollStatus = 'DRAFT' | 'CALCULATED' | 'CONFIRMED';
+
+export interface SalaryItem {
+  id: string;
+  code?: string | null;
+  name: string;
+  itemType: SalaryItemType;
+  calcType: CalcType;
+  calcFormula?: string | null;
+  isDefault: boolean;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface PayrollDetailRow {
+  id: string;
+  salaryItemId: string;
+  name: string;
+  code?: string | null;
+  itemType: SalaryItemType;
+  calcType: CalcType;
+  amount: number;
+  notes?: string | null;
+  sortOrder: number;
+}
+
+export interface Payroll {
+  id: string;
+  userId: string;
+  year: number;
+  month: number;
+  status: PayrollStatus;
+  totalIncome: number;
+  totalDeduction: number;
+  netPay: number;
+  workDays: number;
+  workMinutes: number;
+  overtimeMinutes: number;
+  lateNightMinutes: number;
+  confirmedAt?: string | null;
+  modifyReason?: string | null;
+  user?: { id: string; userCode: string; lastName: string; firstName: string; employmentType?: string } | null;
+  details?: PayrollDetailRow[];
+}

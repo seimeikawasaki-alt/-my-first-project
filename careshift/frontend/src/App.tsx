@@ -9,19 +9,21 @@ import DashboardPage from './pages/admin/DashboardPage';
 import StaffListPage from './pages/admin/StaffListPage';
 import StaffFormPage from './pages/admin/StaffFormPage';
 import GroupsPage from './pages/admin/GroupsPage';
-import PlaceholderPage from './pages/admin/PlaceholderPage';
 import SettingsPage from './pages/admin/SettingsPage';
 import ShiftsPage from './pages/admin/ShiftsPage';
 import AttendancePage from './pages/admin/AttendancePage';
 import ShiftSettingsPage from './pages/admin/ShiftSettingsPage';
 import ShiftRequestsPage from './pages/admin/ShiftRequestsPage';
 import GroupDetailPage from './pages/admin/GroupDetailPage';
+import SalaryPage from './pages/admin/SalaryPage';
+import SalarySettingsPage from './pages/admin/SalarySettingsPage';
 import StaffDashboardPage from './pages/staff/StaffDashboardPage';
 import PunchPage from './pages/staff/PunchPage';
 import MyShiftsPage from './pages/staff/MyShiftsPage';
 import MyAttendancePage from './pages/staff/MyAttendancePage';
 import ShiftRequestPage from './pages/staff/ShiftRequestPage';
 import ProfilePage from './pages/staff/ProfilePage';
+import PayslipsPage from './pages/staff/PayslipsPage';
 
 function RequireAuth({ children, requiredRole }: {
   children: React.ReactNode;
@@ -92,18 +94,8 @@ export default function App() {
           <Route path="shift-settings" element={<ShiftSettingsPage />} />
           <Route path="shift-requests" element={<ShiftRequestsPage />} />
           <Route path="groups/:id" element={<GroupDetailPage />} />
-          <Route
-            path="salary/:year/:month"
-            element={<PlaceholderPage title="給与計算" phase="Phase 3" />}
-          />
-          <Route
-            path="salary/settings"
-            element={<PlaceholderPage title="給与項目設定" phase="Phase 3" />}
-          />
-          <Route
-            path="salary/payslips"
-            element={<PlaceholderPage title="給与明細一覧" phase="Phase 3" />}
-          />
+          <Route path="salary/settings" element={<SalarySettingsPage />} />
+          <Route path="salary/:year/:month" element={<SalaryPage />} />
         </Route>
 
         {/* Staff routes with bottom nav layout */}
@@ -122,7 +114,7 @@ export default function App() {
           <Route path="attendance" element={<MyAttendancePage />} />
           <Route path="shift-request" element={<ShiftRequestPage />} />
           <Route path="profile" element={<ProfilePage />} />
-          <Route path="payslips" element={<PlaceholderPage title="給与明細" phase="Phase 3" />} />
+          <Route path="payslips" element={<PayslipsPage />} />
         </Route>
 
         {/* Root redirect */}

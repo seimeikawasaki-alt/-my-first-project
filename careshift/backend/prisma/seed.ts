@@ -199,24 +199,34 @@ async function main() {
 
   console.log(`Created ${staffIds.length} staff members`);
 
-  // Salary items
+  // Salary items — 11 default items (Phase 3 spec)
+  // calcType: AUTO (engine-calculated via `code`), MANUAL (admin input), FIXED, HOURLY
+  // itemType: INCOME (支給) / DEDUCTION (控除)
   const salaryItems = [
-    { name: '基本給', itemType: 'INCOME', calcType: 'FIXED', isDefault: true, sortOrder: 1 },
-    { name: '残業手当', itemType: 'INCOME', calcType: 'FORMULA', calcFormula: 'hourlyWage * 1.25 * overtimeHours', isDefault: true, sortOrder: 2 },
-    { name: '深夜手当', itemType: 'INCOME', calcType: 'FORMULA', calcFormula: 'hourlyWage * 0.25 * lateNightHours', isDefault: true, sortOrder: 3 },
-    { name: '雇用保険', itemType: 'DEDUCTION', calcType: 'FORMULA', calcFormula: 'totalIncome * 0.006', isDefault: true, sortOrder: 4 },
-    { name: '社会保険', itemType: 'DEDUCTION', calcType: 'FORMULA', calcFormula: 'totalIncome * 0.1495', isDefault: true, sortOrder: 5 },
-    { name: '所得税', itemType: 'DEDUCTION', calcType: 'FORMULA', calcFormula: 'withholdingTax', isDefault: true, sortOrder: 6 },
+    // 支給項目
+    { code: 'BASIC', name: '基本給', itemType: 'INCOME', calcType: 'AUTO', sortOrder: 1 },
+    { code: 'OVERTIME', name: '残業手当', itemType: 'INCOME', calcType: 'AUTO', sortOrder: 2 },
+    { code: 'LATE_NIGHT', name: '深夜手当', itemType: 'INCOME', calcType: 'AUTO', sortOrder: 3 },
+    { code: 'HOLIDAY', name: '休日出勤手当', itemType: 'INCOME', calcType: 'AUTO', sortOrder: 4 },
+    { code: 'COMMUTE', name: '通勤手当', itemType: 'INCOME', calcType: 'MANUAL', sortOrder: 5 },
+    { code: 'OTHER_ALLOWANCE', name: 'その他手当', itemType: 'INCOME', calcType: 'MANUAL', sortOrder: 6 },
+    // 控除項目
+    { code: 'HEALTH_INSURANCE', name: '健康保険料', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 7 },
+    { code: 'PENSION', name: '厚生年金', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 8 },
+    // 雇用保険料は総支給額 × 0.006（calcFormula に率を保持＝設定変更可）
+    { code: 'EMPLOYMENT_INSURANCE', name: '雇用保険料', itemType: 'DEDUCTION', calcType: 'AUTO', calcFormula: '0.006', sortOrder: 9 },
+    { code: 'INCOME_TAX', name: '所得税', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 10 },
+    { code: 'RESIDENT_TAX', name: '住民税', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 11 },
   ];
 
+  // Clear legacy salary items from earlier seeds, then create the canonical set
+  await prisma.salaryItem.deleteMany({});
   for (const item of salaryItems) {
-    await prisma.salaryItem.upsert({
-      where: { id: `salary-${item.sortOrder}` },
-      update: {},
-      create: { id: `salary-${item.sortOrder}`, ...item },
+    await prisma.salaryItem.create({
+      data: { id: `salary-${item.sortOrder}`, isDefault: true, isActive: true, ...item },
     });
   }
-  console.log('Salary items created');
+  console.log('Salary items created (11 defaults)');
 
   // Shift types
   const shiftTypes = [

@@ -3,51 +3,10 @@ import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
+import { calcLateNightMinutes, calcWorkMinutes } from '../utils/workTime.js';
 
 const router = Router();
 const prisma = new PrismaClient();
-
-// Calculate late-night minutes (22:00-05:00) overlap between two timestamps
-// Uses segment arithmetic instead of per-minute iteration
-function calcLateNightMinutes(punchIn: Date, punchOut: Date): number {
-  const totalMs = punchOut.getTime() - punchIn.getTime();
-  if (totalMs <= 0) return 0;
-
-  // We split the period into 1-hour segments and check whether each falls in 22-05
-  // Actually: iterate day-by-day and calculate overlap with late-night window per day
-  let total = 0;
-  const cursor = new Date(punchIn);
-  cursor.setSeconds(0, 0);
-
-  // Clamp start to minute boundary of punchIn
-  if (cursor < punchIn) cursor.setMinutes(cursor.getMinutes() + 1);
-
-  const end = new Date(punchOut);
-
-  while (cursor < end) {
-    // Next boundary: either next hour boundary or end
-    const next = new Date(cursor);
-    next.setHours(next.getHours() + 1, 0, 0, 0);
-    const segEnd = next < end ? next : end;
-    const segMinutes = Math.round((segEnd.getTime() - cursor.getTime()) / 60000);
-    const h = cursor.getHours();
-    if (h >= 22 || h < 5) {
-      total += segMinutes;
-    }
-    cursor.setTime(next.getTime());
-  }
-
-  return total;
-}
-
-function calcWorkMinutes(punchIn: Date, punchOut: Date, breakStart?: Date | null, breakEnd?: Date | null): number {
-  const totalMs = punchOut.getTime() - punchIn.getTime();
-  let breakMs = 0;
-  if (breakStart && breakEnd && breakEnd > breakStart) {
-    breakMs = breakEnd.getTime() - breakStart.getTime();
-  }
-  return Math.round((totalMs - breakMs) / 60000);
-}
 
 // Get today's work date (midnight UTC+9)
 function getTodayWorkDate(): Date {
