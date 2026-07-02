@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Modal from '../../components/common/Modal';
 import { getShifts, createShift, updateShift, deleteShift, publishShifts, bulkCopyShifts, autoGenerateShifts } from '../../api/shifts';
 import { getShiftTypes } from '../../api/shiftTypes';
+import { getShiftRequests } from '../../api/shiftRequests';
 import { staffApi } from '../../api/staff';
 import { groupsApi } from '../../api/groups';
-import type { Shift, ShiftType, User, Group, GenerationResult, StaffShiftStats } from '../../types';
+import type { Shift, ShiftType, ShiftRequest, User, Group, GenerationResult, StaffShiftStats } from '../../types';
 
 type CellShift = Shift & { user?: { lastName: string; firstName: string } | null };
 
@@ -26,6 +27,7 @@ export default function ShiftsPage() {
 
   const [shifts, setShifts] = useState<CellShift[]>([]);
   const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([]);
+  const [requests, setRequests] = useState<ShiftRequest[]>([]);
   const [staff, setStaff] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState('');
@@ -69,14 +71,16 @@ export default function ShiftsPage() {
     if (isNaN(year) || isNaN(month) || !selectedGroup) return;
     setLoading(true);
     try {
-      const [shiftsRes, typesRes, staffRes] = await Promise.all([
+      const [shiftsRes, typesRes, staffRes, reqRes] = await Promise.all([
         getShifts({ year, month, groupId: selectedGroup }),
         getShiftTypes(),
-        staffApi.list({ is_active: true, group_id: selectedGroup, per_page: 100 }),
+        staffApi.list({ is_active: 'true', group_id: selectedGroup, per_page: 100 }),
+        getShiftRequests(),
       ]);
       setShifts(shiftsRes.data);
       setShiftTypes(typesRes.data);
       setStaff(staffRes.data.data.filter((u: User) => u.role !== 'ADMIN'));
+      setRequests(reqRes.data);
     } finally {
       setLoading(false);
     }
@@ -178,6 +182,22 @@ export default function ShiftsPage() {
   };
 
   const typeMap = new Map(shiftTypes.map(t => [t.id, t]));
+
+  // Map staff requests onto grid cells (`${userId}-${day}`). Rejected requests
+  // are ignored; VACATION takes visual priority over PREFERRED on the same day.
+  const VACATION_COLOR = '#F97316';
+  const requestMap = new Map<string, ShiftRequest[]>();
+  requests.forEach(r => {
+    if (!r.targetDate || r.status === 'REJECTED') return;
+    const d = new Date(r.targetDate);
+    if (d.getUTCFullYear() !== year || d.getUTCMonth() + 1 !== month) return;
+    const key = `${r.userId}-${d.getUTCDate()}`;
+    const arr = requestMap.get(key) ?? [];
+    arr.push(r);
+    requestMap.set(key, arr);
+  });
+  const primaryRequest = (list: ShiftRequest[]): ShiftRequest =>
+    list.find(r => r.requestType === 'VACATION') ?? list[0];
 
   return (
     <div className="p-6">
@@ -301,6 +321,16 @@ export default function ShiftsPage() {
         ))}
         <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-gray-200 text-subtext">未設定</span>
         <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-100 text-primary border border-blue-200">AUTO (未確定)</span>
+        {/* Request markers */}
+        <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-white border border-border text-subtext">
+          <span className="inline-block w-0 h-0" style={{ borderTop: '10px solid #F97316', borderLeft: '10px solid transparent' }} />
+          休暇希望
+        </span>
+        <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-white border border-border text-subtext">
+          <span className="inline-block w-0 h-0" style={{ borderTop: '10px solid #94A3B8', borderLeft: '10px solid transparent' }} />
+          希望シフト（色は希望勤務）
+        </span>
+        <span className="text-xs text-subtext">※ 隅マーカーが薄い＝審査中 / 濃い＝承認済</span>
       </div>
 
       {/* Grid */}
@@ -339,15 +369,38 @@ export default function ShiftsPage() {
                     const type = shift?.shiftTypeId ? typeMap.get(shift.shiftTypeId) : null;
                     const isAuto = shift?.status === 'AUTO';
                     const isDraft = shift?.status === 'DRAFT';
+                    const cellReqs = requestMap.get(`${user.id}-${d}`);
+                    const req = cellReqs ? primaryRequest(cellReqs) : null;
+                    const reqType = req?.shiftTypeId ? typeMap.get(req.shiftTypeId) : null;
+                    const isVacation = req?.requestType === 'VACATION';
+                    const markerColor = req
+                      ? (isVacation ? VACATION_COLOR : (reqType?.color ?? '#94A3B8'))
+                      : null;
+                    const reqLabel = req
+                      ? (isVacation ? '休暇希望' : reqType ? `希望シフト: ${reqType.name}` : 'シフト変更申請')
+                        + (req.status === 'PENDING' ? '（審査中）' : '（承認済）')
+                      : null;
+                    const title = [isAuto ? '自動生成（未確定）' : null, reqLabel]
+                      .filter(Boolean).join(' / ') || undefined;
                     return (
                       <td key={d} className="p-0.5 text-center border-r border-border last:border-r-0">
                         <button
                           onClick={() => openCell(user.id, d)}
-                          className={`w-full h-8 rounded text-xs font-medium transition-opacity ${shift ? 'text-white' : 'text-gray-300 hover:bg-gray-100'} ${isDraft ? 'opacity-60' : ''} ${isAuto ? 'ring-1 ring-blue-300' : ''}`}
+                          className={`relative overflow-hidden w-full h-8 rounded text-xs font-medium transition-opacity ${shift ? 'text-white' : 'text-gray-300 hover:bg-gray-100'} ${isDraft ? 'opacity-60' : ''} ${isAuto ? 'ring-1 ring-blue-300' : ''}`}
                           style={type ? { backgroundColor: type.color ?? '#94A3B8' } : undefined}
-                          title={isAuto ? '自動生成（未確定）' : undefined}
+                          title={title}
                         >
                           {type ? type.name.slice(0, 2) : '+'}
+                          {markerColor && (
+                            <span
+                              className="absolute top-0 right-0 w-0 h-0"
+                              style={{
+                                borderTop: `11px solid ${markerColor}`,
+                                borderLeft: '11px solid transparent',
+                                opacity: req?.status === 'PENDING' ? 0.55 : 1,
+                              }}
+                            />
+                          )}
                         </button>
                       </td>
                     );
