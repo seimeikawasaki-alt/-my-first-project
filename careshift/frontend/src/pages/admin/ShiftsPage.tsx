@@ -49,10 +49,6 @@ export default function ShiftsPage() {
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  const filteredStaff = selectedGroup
-    ? staff.filter(u => u.groups?.some(g => g.id === selectedGroup))
-    : staff;
-
   const shiftMap = new Map<string, CellShift>();
   shifts.forEach(s => {
     const d = new Date(s.shiftDate);
@@ -60,20 +56,27 @@ export default function ShiftsPage() {
     shiftMap.set(key, s);
   });
 
+  // Load groups once and default to the first group (shifts are managed per group)
+  useEffect(() => {
+    groupsApi.list().then(res => {
+      const gs = res.data.data;
+      setGroups(gs);
+      setSelectedGroup(prev => prev || (gs[0]?.id ?? ''));
+    });
+  }, []);
+
   const load = useCallback(async () => {
-    if (isNaN(year) || isNaN(month)) return;
+    if (isNaN(year) || isNaN(month) || !selectedGroup) return;
     setLoading(true);
     try {
-      const [shiftsRes, typesRes, staffRes, groupsRes] = await Promise.all([
-        getShifts({ year, month, groupId: selectedGroup || undefined }),
+      const [shiftsRes, typesRes, staffRes] = await Promise.all([
+        getShifts({ year, month, groupId: selectedGroup }),
         getShiftTypes(),
-        staffApi.list({ is_active: true }),
-        groupsApi.list(),
+        staffApi.list({ is_active: true, group_id: selectedGroup, per_page: 100 }),
       ]);
       setShifts(shiftsRes.data);
       setShiftTypes(typesRes.data);
       setStaff(staffRes.data.data.filter((u: User) => u.role !== 'ADMIN'));
-      setGroups(groupsRes.data.data);
     } finally {
       setLoading(false);
     }
@@ -193,7 +196,6 @@ export default function ShiftsPage() {
             onChange={e => setSelectedGroup(e.target.value)}
             className="input py-2 text-sub"
           >
-            <option value="">全グループ</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
           <button onClick={handleCopy} disabled={copying} className="btn-secondary">
@@ -327,7 +329,7 @@ export default function ShiftsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredStaff.map(user => (
+              {staff.map(user => (
                 <tr key={user.id} className="border-b border-border hover:bg-gray-50">
                   <td className="sticky left-0 bg-white border-r border-border px-3 py-2 font-medium text-text whitespace-nowrap">
                     {user.lastName} {user.firstName}

@@ -284,51 +284,72 @@ export default function GroupDetailPage() {
             すべて空欄なら「シフト設定」の全体設定を使用します。
             <span className="text-danger">数字を入れるとこのグループはその内容だけで生成され、全体設定は使われません</span>（必要なシフト種別はすべて入力してください）。「全日」は曜日指定がない場合の既定値です。
           </p>
-          <table className="w-full table-fixed border-collapse bg-white border border-border rounded-xl overflow-hidden">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="border border-border px-3 py-3 text-left text-sub text-subtext font-semibold" style={{ width: '16%' }}>シフト種別</th>
-                <th className="border border-border px-1 py-3 text-center text-sub font-semibold text-text bg-blue-50" style={{ width: '12%' }}>全日</th>
-                {WEEKDAY_JA.map((d, i) => (
-                  <th key={i} className={`border border-border px-1 py-3 text-center text-sub font-semibold ${i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-subtext'}`}>{d}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {shiftTypes.map(st => (
-                <tr key={st.id} className="hover:bg-gray-50/50">
-                  <td className="border border-border px-3 py-3 font-semibold">
-                    <span className="inline-flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: st.color ?? '#94A3B8' }} />
-                      <span className="text-base text-text">{st.name}</span>
-                    </span>
-                  </td>
-                  {(['all', 0, 1, 2, 3, 4, 5, 6] as const).map(day => {
-                    const key = `${st.id}|${day}`;
-                    const raw = reqGrid.get(key);
-                    const isAll = day === 'all';
-                    return (
-                      <td key={String(day)} className={`border border-border p-1.5 text-center align-middle ${isAll ? 'bg-blue-50/40' : ''}`}>
-                        <input
-                          type="number"
-                          min={0}
-                          max={20}
-                          value={raw ?? ''}
-                          placeholder="—"
-                          onChange={e => {
-                            const rawv = e.target.value;
-                            if (rawv === '') clearReqVal(key);
-                            else setReqVal(key, parseInt(rawv) || 0);
-                          }}
-                          className="w-full h-10 border border-border rounded-md text-center text-lg font-semibold text-text placeholder:text-gray-300 placeholder:font-normal focus:border-primary focus:ring-1 focus:ring-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                        />
-                      </td>
-                    );
-                  })}
+          <div className="overflow-x-auto pb-1">
+            <table className="w-full border-collapse bg-white border border-border rounded-xl overflow-hidden" style={{ minWidth: '860px' }}>
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="border border-border px-3 py-3 text-left text-sub text-subtext font-semibold" style={{ width: '120px' }}>シフト種別</th>
+                  <th className="border border-border px-1 py-3 text-center text-sub font-semibold text-text bg-blue-50">全日</th>
+                  {WEEKDAY_JA.map((d, i) => (
+                    <th key={i} className={`border border-border px-1 py-3 text-center text-sub font-semibold ${i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-subtext'}`}>{d}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {shiftTypes.map(st => (
+                  <tr key={st.id} className="hover:bg-gray-50/50">
+                    <td className="border border-border px-3 py-3 font-semibold">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: st.color ?? '#94A3B8' }} />
+                        <span className="text-base text-text">{st.name}</span>
+                      </span>
+                    </td>
+                    {(['all', 0, 1, 2, 3, 4, 5, 6] as const).map(day => {
+                      const key = `${st.id}|${day}`;
+                      const raw = reqGrid.get(key);
+                      const cur = raw ?? 0;
+                      const isAll = day === 'all';
+                      return (
+                        <td key={String(day)} className={`border border-border p-1.5 align-middle ${isAll ? 'bg-blue-50/40' : ''}`}>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => { const n = cur - 1; if (n <= 0) clearReqVal(key); else setReqVal(key, n); }}
+                              className="w-7 h-8 flex-shrink-0 flex items-center justify-center rounded-md bg-gray-100 hover:bg-gray-200 active:scale-95 text-lg font-bold text-text leading-none transition"
+                              aria-label="減らす"
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              min={0}
+                              max={20}
+                              value={raw ?? ''}
+                              placeholder="—"
+                              onChange={e => {
+                                const rawv = e.target.value;
+                                if (rawv === '') clearReqVal(key);
+                                else setReqVal(key, parseInt(rawv) || 0);
+                              }}
+                              className="w-9 h-8 border border-border rounded-md text-center text-base font-bold text-text placeholder:text-gray-300 placeholder:font-normal focus:border-primary focus:ring-1 focus:ring-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setReqVal(key, cur + 1)}
+                              className="w-7 h-8 flex-shrink-0 flex items-center justify-center rounded-md bg-primary/10 hover:bg-primary/20 active:scale-95 text-lg font-bold text-primary leading-none transition"
+                              aria-label="増やす"
+                            >
+                              ＋
+                            </button>
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {reqMsg && <p className={`text-sub mt-3 ${reqMsg.includes('失敗') ? 'text-danger' : 'text-primary'}`}>{reqMsg}</p>}
           <button onClick={handleReqSave} disabled={reqSaving} className="btn-primary mt-6 disabled:opacity-60">
             {reqSaving ? '保存中...' : '必要人数を保存'}
