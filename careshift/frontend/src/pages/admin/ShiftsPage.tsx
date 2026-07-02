@@ -215,7 +215,7 @@ export default function ShiftsPage() {
             onChange={e => setOverwrite(e.target.checked)}
             className="w-3.5 h-3.5"
           />
-          既存シフトを上書き
+          確定済み（公開）シフトも上書き
         </label>
         <button
           onClick={() => setShowGenModal(true)}
@@ -367,12 +367,13 @@ export default function ShiftsPage() {
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sub text-text space-y-1">
             <p><span className="font-medium">対象期間:</span> {year}年{month}月</p>
             <p><span className="font-medium">対象グループ:</span> {selectedGroup ? groups.find(g => g.id === selectedGroup)?.name : '全グループ'}</p>
-            <p><span className="font-medium">上書き:</span> {overwrite ? 'あり（既存DRAFT/AUTOシフトを削除）' : 'なし'}</p>
+            <p><span className="font-medium">上書き:</span> {overwrite ? '確定済み（公開）シフトも削除して再生成' : '確定済みシフトは保持（未確定シフトのみ再生成）'}</p>
           </div>
           <div className="text-sub text-subtext space-y-1">
             <p>• シフト要件・生成ルール・スタッフ制約を元に自動生成します</p>
+            <p>• 必要人数ちょうどで生成されます（超過しません）</p>
+            <p>• 再生成時は既存の自動生成シフトを消してから作り直します</p>
             <p>• 夜勤翌日は夜勤または休みになるよう制御されます</p>
-            <p>• 夜勤・早番はグループ内で均等に分配されます</p>
             <p>• 生成結果はAUTO（未確定）状態となります</p>
           </div>
           <div className="flex gap-3 pt-2">

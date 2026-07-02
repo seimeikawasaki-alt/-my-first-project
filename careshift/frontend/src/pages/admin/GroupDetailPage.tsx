@@ -279,88 +279,56 @@ export default function GroupDetailPage() {
       {/* Tab: 必要人数設定 */}
       {activeTab === 'requirements' && (
         <div>
-          <p className="text-sub text-subtext mb-1">このグループの<span className="font-semibold text-text">1日あたりの必要人数</span>を設定します。</p>
-          <p className="text-xs text-subtext mb-5">「全日」は曜日ごとの指定がない場合の既定値です。空欄・0はその区分の要件なし。</p>
-          <div className="overflow-x-auto pb-2">
-            <table className="border-collapse bg-white border border-border rounded-xl overflow-hidden" style={{ minWidth: '960px' }}>
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="border border-border px-4 py-3 text-left text-sub text-subtext font-semibold sticky left-0 bg-gray-50 z-10" style={{ minWidth: '120px' }}>シフト種別</th>
-                  <th className="border border-border px-2 py-3 text-center text-sub font-semibold text-text bg-blue-50" style={{ width: '110px' }}>全日</th>
-                  {WEEKDAY_JA.map((d, i) => (
-                    <th key={i} className={`border border-border px-2 py-3 text-center text-sub font-semibold ${i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-subtext'}`} style={{ width: '96px' }}>{d}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {shiftTypes.map(st => (
-                  <tr key={st.id} className="hover:bg-gray-50/50">
-                    <td className="border border-border px-4 py-3 font-semibold sticky left-0 bg-white z-10">
-                      <span className="inline-flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: st.color ?? '#94A3B8' }} />
-                        <span className="text-base text-text">{st.name}</span>
-                      </span>
-                    </td>
-                    {(['all', 0, 1, 2, 3, 4, 5, 6] as const).map(day => {
-                      const key = `${st.id}|${day}`;
-                      const raw = reqGrid.get(key);
-                      const has = raw != null;
-                      const val = raw ?? 0;
-                      const isAll = day === 'all';
-                      return (
-                        <td key={String(day)} className={`border border-border p-2 text-center align-middle ${isAll ? 'bg-blue-50/40' : ''}`}>
-                          {has ? (
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setReqVal(key, val - 1)}
-                                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 active:scale-95 text-lg font-bold text-text leading-none transition"
-                                  aria-label="減らす"
-                                >
-                                  −
-                                </button>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={20}
-                                  value={val}
-                                  onChange={e => setReqVal(key, parseInt(e.target.value) || 0)}
-                                  className="w-11 h-9 border border-border rounded-lg text-center text-lg font-bold text-text focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setReqVal(key, val + 1)}
-                                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-primary/10 hover:bg-primary/20 active:scale-95 text-lg font-bold text-primary leading-none transition"
-                                  aria-label="増やす"
-                                >
-                                  ＋
-                                </button>
-                              </div>
-                              <button
-                                onClick={() => clearReqVal(key)}
-                                className="text-danger hover:underline"
-                                style={{ fontSize: '11px' }}
-                              >
-                                クリア
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setReqVal(key, 1)}
-                              className="w-full py-3 rounded-lg text-primary text-sub font-medium hover:bg-primary/5 border border-dashed border-border hover:border-primary/40 transition"
-                            >
-                              ＋設定
-                            </button>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
+          <p className="text-sub text-subtext mb-1">このグループ専用の<span className="font-semibold text-text">1日あたりの必要人数</span>を設定します（任意）。</p>
+          <p className="text-xs text-subtext mb-5">
+            すべて空欄なら「シフト設定」の全体設定を使用します。
+            <span className="text-danger">数字を入れるとこのグループはその内容だけで生成され、全体設定は使われません</span>（必要なシフト種別はすべて入力してください）。「全日」は曜日指定がない場合の既定値です。
+          </p>
+          <table className="w-full table-fixed border-collapse bg-white border border-border rounded-xl overflow-hidden">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="border border-border px-3 py-3 text-left text-sub text-subtext font-semibold" style={{ width: '16%' }}>シフト種別</th>
+                <th className="border border-border px-1 py-3 text-center text-sub font-semibold text-text bg-blue-50" style={{ width: '12%' }}>全日</th>
+                {WEEKDAY_JA.map((d, i) => (
+                  <th key={i} className={`border border-border px-1 py-3 text-center text-sub font-semibold ${i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-subtext'}`}>{d}</th>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </tr>
+            </thead>
+            <tbody>
+              {shiftTypes.map(st => (
+                <tr key={st.id} className="hover:bg-gray-50/50">
+                  <td className="border border-border px-3 py-3 font-semibold">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: st.color ?? '#94A3B8' }} />
+                      <span className="text-base text-text">{st.name}</span>
+                    </span>
+                  </td>
+                  {(['all', 0, 1, 2, 3, 4, 5, 6] as const).map(day => {
+                    const key = `${st.id}|${day}`;
+                    const raw = reqGrid.get(key);
+                    const isAll = day === 'all';
+                    return (
+                      <td key={String(day)} className={`border border-border p-1.5 text-center align-middle ${isAll ? 'bg-blue-50/40' : ''}`}>
+                        <input
+                          type="number"
+                          min={0}
+                          max={20}
+                          value={raw ?? ''}
+                          placeholder="—"
+                          onChange={e => {
+                            const rawv = e.target.value;
+                            if (rawv === '') clearReqVal(key);
+                            else setReqVal(key, parseInt(rawv) || 0);
+                          }}
+                          className="w-full h-10 border border-border rounded-md text-center text-lg font-semibold text-text placeholder:text-gray-300 placeholder:font-normal focus:border-primary focus:ring-1 focus:ring-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
           {reqMsg && <p className={`text-sub mt-3 ${reqMsg.includes('失敗') ? 'text-danger' : 'text-primary'}`}>{reqMsg}</p>}
           <button onClick={handleReqSave} disabled={reqSaving} className="btn-primary mt-6 disabled:opacity-60">
             {reqSaving ? '保存中...' : '必要人数を保存'}

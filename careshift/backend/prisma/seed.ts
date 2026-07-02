@@ -273,43 +273,35 @@ async function main() {
   }
   console.log('Shift rules created');
 
-  // Per-group ShiftRequirements (全日・単一の必要人数)
-  // 通常グループ（10名）: 日勤3 / 早番1 / 遅番1 / 夜勤1 = 6枠/日 → 1人あたり約18日/月
-  const regularReq: Record<string, number> = {
+  // ShiftRequirements (全日・単一の必要人数)
+  // Reset first so stale per-group rows from earlier seeds don't override the
+  // global defaults edited in the シフト設定 screen.
+  await prisma.shiftRequirement.deleteMany({});
+
+  // Global defaults (groupId=null) — これが「シフト設定」画面の数字。
+  // 通常グループはこの数字を使う（日勤3 / 夜勤1 / 早番1 / 遅番1 = 6枠/日 → 1人約18日/月）。
+  const globalReq: Record<string, number> = {
     'shift-type-1': 3, // 日勤
     'shift-type-2': 1, // 夜勤
     'shift-type-3': 1, // 早番
     'shift-type-4': 1, // 遅番
   };
-  // 夜勤専従グループ（10名）: 夜勤中心
-  const nightReq: Record<string, number> = {
-    'shift-type-1': 0, // 日勤
-    'shift-type-2': 3, // 夜勤
-    'shift-type-3': 0, // 早番
-    'shift-type-4': 0, // 遅番
-  };
-
-  for (const g of GROUPS) {
-    const reqSet = g.id === 'group-night' ? nightReq : regularReq;
-    for (const [shiftTypeId, requiredStaff] of Object.entries(reqSet)) {
-      if (requiredStaff <= 0) continue;
-      const reqId = `req-${g.id}-${shiftTypeId}`;
-      await prisma.shiftRequirement.upsert({
-        where: { id: reqId },
-        update: { requiredStaff },
-        create: {
-          id: reqId,
-          shiftTypeId,
-          dayOfWeek: null,
-          dateType: 'ALL',
-          requiredStaff,
-          groupId: g.id,
-          isActive: true,
-        },
-      });
-    }
+  for (const [shiftTypeId, requiredStaff] of Object.entries(globalReq)) {
+    if (requiredStaff <= 0) continue;
+    await prisma.shiftRequirement.create({
+      data: { shiftTypeId, dayOfWeek: null, dateType: 'ALL', requiredStaff, groupId: null, isActive: true },
+    });
   }
-  console.log('Per-group shift requirements created');
+
+  // 夜勤専従グループのみ個別上書き（夜勤中心）
+  const nightGroupReq: Record<string, number> = { 'shift-type-2': 3 };
+  for (const [shiftTypeId, requiredStaff] of Object.entries(nightGroupReq)) {
+    if (requiredStaff <= 0) continue;
+    await prisma.shiftRequirement.create({
+      data: { shiftTypeId, dayOfWeek: null, dateType: 'ALL', requiredStaff, groupId: 'group-night', isActive: true },
+    });
+  }
+  console.log('Shift requirements created (global defaults + night-group override)');
 
   console.log('Seed completed successfully!');
 }

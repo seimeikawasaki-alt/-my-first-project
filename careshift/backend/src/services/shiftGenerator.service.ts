@@ -139,9 +139,15 @@ export async function generateShifts(params: {
   const activeStaffSet = new Set(activeStaff.map((s: { id: string }) => s.id));
 
   // Overwrite: clear existing DRAFT/AUTO shifts once for all involved staff
+  // Always clear previously auto-generated (and draft) shifts for the target staff
+  // so regeneration is fresh and never accumulates beyond the required number.
+  await prisma.shift.deleteMany({
+    where: { userId: { in: allStaffIds }, shiftDate: { gte: monthStart, lt: monthEnd }, status: { in: ['DRAFT', 'AUTO'] } },
+  });
+  // "上書き" additionally replaces confirmed (published) shifts.
   if (overwrite) {
     await prisma.shift.deleteMany({
-      where: { userId: { in: allStaffIds }, shiftDate: { gte: monthStart, lt: monthEnd }, status: { in: ['DRAFT', 'AUTO'] } },
+      where: { userId: { in: allStaffIds }, shiftDate: { gte: monthStart, lt: monthEnd }, status: 'PUBLISHED' },
     });
   }
 
@@ -173,13 +179,21 @@ export async function generateShifts(params: {
     preferredMap.get(req.userId)!.set(dk, req.shiftTypeId);
   }
 
-  // Existing shifts in the month → avoid double-booking across groups / when not overwriting
+  // Remaining shifts (preserved published ones) → avoid double-booking and count
+  // them toward requirements so the total never exceeds the required number.
   const existingShifts = await prisma.shift.findMany({
     where: { userId: { in: allStaffIds }, shiftDate: { gte: monthStart, lt: monthEnd } },
-    select: { userId: true, shiftDate: true },
+    select: { userId: true, shiftDate: true, shiftTypeId: true },
   });
   const globalAssignedKeys = new Set<string>();
-  for (const s of existingShifts) globalAssignedKeys.add(`${s.userId}|${dateKey(s.shiftDate)}`);
+  const existingBySlot = new Map<string, Set<string>>(); // `${dk}|${shiftTypeId}` → userIds
+  for (const s of existingShifts) {
+    const dk = dateKey(s.shiftDate);
+    globalAssignedKeys.add(`${s.userId}|${dk}`);
+    const slot = `${dk}|${s.shiftTypeId}`;
+    if (!existingBySlot.has(slot)) existingBySlot.set(slot, new Set());
+    existingBySlot.get(slot)!.add(s.userId);
+  }
 
   const warnings: Warning[] = [];
   const unfilledSlots: UnfilledSlot[] = [];
@@ -217,6 +231,7 @@ export async function generateShifts(params: {
       .map((m: { userId: string }) => m.userId);
     if (gStaffIds.length === 0) continue;
     gStaffIds.forEach((id: string) => processedStaff.add(id));
+    const gStaffIdsSet = new Set<string>(gStaffIds);
 
     // Group requirements (fall back to global defaults if none defined)
     let gReqs = allRequirements.filter(r => r.groupId === gid);
@@ -286,6 +301,14 @@ export async function generateShifts(params: {
         const isNight = nightShiftIds.has(shiftTypeId);
         const isEarly = earlyShiftIds.has(shiftTypeId);
 
+        // Count preserved (published) shifts of this group already filling this
+        // slot, so we never assign more than the required number.
+        const slotKey = `${dk}|${shiftTypeId}`;
+        const existingInSlot = existingBySlot.has(slotKey)
+          ? [...existingBySlot.get(slotKey)!].filter(uid => gStaffIdsSet.has(uid)).length
+          : 0;
+        const toAssign = Math.max(0, required - existingInSlot);
+
         const eligible = staffStates.filter(staff => {
           if (staff.assignedDates.has(dk)) return false;
           if (globalAssignedKeys.has(`${staff.id}|${dk}`)) return false;
@@ -331,7 +354,7 @@ export async function generateShifts(params: {
         const assigned: StaffState[] = [];
 
         for (const staff of sorted) {
-          if (assigned.length >= required) break;
+          if (assigned.length >= toAssign) break;
           if (staff.requiresPairing && assigned.length === 0) {
             const othersAvail = sorted.filter(s => s !== staff && !s.requiresPairing).length;
             if (othersAvail === 0) continue;
@@ -346,10 +369,11 @@ export async function generateShifts(params: {
           warnings.push({ type: 'SKILL_SHORTAGE', date: dk, shiftTypeName: shiftType.name, message: `${dk} ${shiftType.name}: 有資格者が不足しています`, severity: 'MEDIUM' });
         }
 
-        if (assigned.length < required) {
-          const shortage = required - assigned.length;
+        const filled = assigned.length + existingInSlot;
+        if (filled < required) {
+          const shortage = required - filled;
           warnings.push({ type: 'UNDERSTAFFED', date: dk, shiftTypeName: shiftType.name, message: `${dk} ${shiftType.name}: ${shortage}名不足`, severity: shortage >= 2 ? 'HIGH' : 'MEDIUM' });
-          unfilledSlots.push({ date: dk, shiftTypeName: shiftType.name, required, assigned: assigned.length, shortage });
+          unfilledSlots.push({ date: dk, shiftTypeName: shiftType.name, required, assigned: filled, shortage });
         }
 
         for (const staff of assigned) {

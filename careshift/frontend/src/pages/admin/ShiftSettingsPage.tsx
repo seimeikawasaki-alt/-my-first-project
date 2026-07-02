@@ -46,7 +46,9 @@ export default function ShiftSettingsPage() {
       setRules(rulesRes.data);
 
       const grid = new Map<string, number>();
-      reqsRes.data.forEach(r => {
+      // Only the global defaults (groupId=null); per-group overrides are edited
+      // on each group's detail page.
+      reqsRes.data.filter(r => r.groupId == null).forEach(r => {
         const key = makeKey(r.shiftTypeId, r.dayOfWeek ?? 'all');
         grid.set(key, r.requiredStaff);
       });
@@ -71,16 +73,6 @@ export default function ShiftSettingsPage() {
     setReqGrid(prev => {
       const updated = new Map(prev);
       updated.set(makeKey(shiftTypeId, day), Math.max(0, value));
-      return updated;
-    });
-  };
-
-  const addReq = (shiftTypeId: string, day: number | 'all') => {
-    setReqGrid(prev => {
-      const key = makeKey(shiftTypeId, day);
-      if (prev.has(key)) return prev;
-      const updated = new Map(prev);
-      updated.set(key, 1);
       return updated;
     });
   };
@@ -173,85 +165,52 @@ export default function ShiftSettingsPage() {
           {shiftTypes.length === 0 ? (
             <p className="text-center text-subtext py-8">アクティブなシフト種別がありません。先にシフト種別を登録してください。</p>
           ) : (
-            <div className="overflow-x-auto pb-2">
-              <table className="border-collapse bg-white border border-border rounded-xl overflow-hidden" style={{ minWidth: '960px' }}>
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="border border-border px-4 py-3 text-left text-sub text-subtext font-semibold sticky left-0 bg-gray-50 z-10" style={{ minWidth: '120px' }}>シフト種別</th>
-                    <th className="border border-border px-2 py-3 text-center text-sub font-semibold text-text bg-blue-50" style={{ width: '110px' }}>全日</th>
-                    {DAYS_JA.map((d, i) => (
-                      <th key={i} className={`border border-border px-2 py-3 text-center text-sub font-semibold ${i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-subtext'}`} style={{ width: '96px' }}>
-                        {d}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {shiftTypes.map(st => (
-                    <tr key={st.id} className="hover:bg-gray-50/50">
-                      <td className="border border-border px-4 py-3 font-semibold text-text sticky left-0 bg-white z-10">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: st.color ?? '#94A3B8' }} />
-                          <span className="text-base">{st.name}</span>
-                        </span>
-                      </td>
-                      {(['all', 0, 1, 2, 3, 4, 5, 6] as const).map(day => {
-                        const req = getReq(st.id, day);
-                        const isAll = day === 'all';
-                        return (
-                          <td key={String(day)} className={`border border-border p-2 text-center align-middle ${isAll ? 'bg-blue-50/40' : ''}`}>
-                            {req != null ? (
-                              <div className="flex flex-col items-center gap-1">
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => setReq(st.id, day, req - 1)}
-                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 active:scale-95 text-lg font-bold text-text leading-none transition"
-                                    aria-label="減らす"
-                                  >
-                                    −
-                                  </button>
-                                  <input
-                                    type="number"
-                                    value={req}
-                                    min={0}
-                                    max={20}
-                                    onChange={e => setReq(st.id, day, parseInt(e.target.value) || 0)}
-                                    className="w-11 h-9 border border-border rounded-lg text-center text-lg font-bold text-text focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => setReq(st.id, day, req + 1)}
-                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-primary/10 hover:bg-primary/20 active:scale-95 text-lg font-bold text-primary leading-none transition"
-                                    aria-label="増やす"
-                                  >
-                                    ＋
-                                  </button>
-                                </div>
-                                <button
-                                  onClick={() => clearReq(st.id, day)}
-                                  className="text-danger hover:underline"
-                                  style={{ fontSize: '11px' }}
-                                >
-                                  クリア
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => addReq(st.id, day)}
-                                className="w-full py-3 rounded-lg text-primary text-sub font-medium hover:bg-primary/5 border border-dashed border-border hover:border-primary/40 transition"
-                              >
-                                ＋設定
-                              </button>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
+            <table className="w-full table-fixed border-collapse bg-white border border-border rounded-xl overflow-hidden">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="border border-border px-3 py-3 text-left text-sub text-subtext font-semibold" style={{ width: '16%' }}>シフト種別</th>
+                  <th className="border border-border px-1 py-3 text-center text-sub font-semibold text-text bg-blue-50" style={{ width: '12%' }}>全日</th>
+                  {DAYS_JA.map((d, i) => (
+                    <th key={i} className={`border border-border px-1 py-3 text-center text-sub font-semibold ${i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-subtext'}`}>
+                      {d}
+                    </th>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </tr>
+              </thead>
+              <tbody>
+                {shiftTypes.map(st => (
+                  <tr key={st.id} className="hover:bg-gray-50/50">
+                    <td className="border border-border px-3 py-3 font-semibold text-text">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: st.color ?? '#94A3B8' }} />
+                        <span className="text-base">{st.name}</span>
+                      </span>
+                    </td>
+                    {(['all', 0, 1, 2, 3, 4, 5, 6] as const).map(day => {
+                      const req = getReq(st.id, day);
+                      const isAll = day === 'all';
+                      return (
+                        <td key={String(day)} className={`border border-border p-1.5 text-center align-middle ${isAll ? 'bg-blue-50/40' : ''}`}>
+                          <input
+                            type="number"
+                            min={0}
+                            max={20}
+                            value={req ?? ''}
+                            placeholder="—"
+                            onChange={e => {
+                              const raw = e.target.value;
+                              if (raw === '') clearReq(st.id, day);
+                              else setReq(st.id, day, parseInt(raw) || 0);
+                            }}
+                            className="w-full h-10 border border-border rounded-md text-center text-lg font-semibold text-text placeholder:text-gray-300 placeholder:font-normal focus:border-primary focus:ring-1 focus:ring-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
 
           <div className="mt-6 flex items-center gap-3">

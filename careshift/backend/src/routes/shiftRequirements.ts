@@ -77,11 +77,13 @@ router.post('/bulk', authenticate, authorize('ADMIN'), async (req: Request, res:
     return;
   }
 
-  // Delete existing for the same shiftTypes and groupId
+  // Delete existing for the same shiftTypes and the SAME group scope only.
+  // groupId null → global defaults (IS NULL); a string → that group. Using the
+  // value directly ensures a global save doesn't wipe per-group overrides.
   const shiftTypeIds = [...new Set(parsed.data.map(r => r.shiftTypeId))];
   const groupId = parsed.data[0]?.groupId ?? null;
   await prisma.shiftRequirement.deleteMany({
-    where: { shiftTypeId: { in: shiftTypeIds }, groupId: groupId ?? undefined },
+    where: { shiftTypeId: { in: shiftTypeIds }, groupId },
   });
 
   const created = await prisma.shiftRequirement.createMany({
