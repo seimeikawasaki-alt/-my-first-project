@@ -31,6 +31,21 @@ export async function getMyAttendances(params: { year: number; month: number }) 
   return res.data;
 }
 
+export async function createAttendance(data: {
+  userId: string;
+  workDate: string;
+  punchIn?: string | null;
+  punchOut?: string | null;
+  breakStart?: string | null;
+  breakEnd?: string | null;
+  status?: string;
+  isHolidayWork?: boolean;
+  notes?: string | null;
+}) {
+  const res = await apiClient.post<ApiResponse<Attendance>>('/attendance', data);
+  return res.data;
+}
+
 export async function correctAttendance(id: string, data: {
   punchIn?: string;
   punchOut?: string;

@@ -4,9 +4,22 @@ import { PrismaClient } from '@prisma/client';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { calcLateNightMinutes, calcWorkMinutes } from '../utils/workTime.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+const attendanceCreateSchema = z.object({
+  userId: z.string().min(1, 'スタッフは必須です'),
+  workDate: z.string().min(1, '日付は必須です'),
+  punchIn: z.string().datetime().optional().nullable(),
+  punchOut: z.string().datetime().optional().nullable(),
+  breakStart: z.string().datetime().optional().nullable(),
+  breakEnd: z.string().datetime().optional().nullable(),
+  status: z.string().optional(),
+  isHolidayWork: z.boolean().optional(),
+  notes: z.string().optional().nullable(),
+});
 
 // Get today's work date (midnight UTC+9)
 function getTodayWorkDate(): Date {
@@ -348,6 +361,67 @@ router.get('/', authenticate, authorize('ADMIN'), async (req: Request, res: Resp
 
   sendSuccess(res, recordsWithUser);
 });
+
+// POST /api/v1/attendance — admin creates an attendance record manually
+router.post('/', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const parsed = attendanceCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 400, 'VALIDATION_ERROR', '入力内容に誤りがあります',
+      parsed.error.errors.map(e => ({ field: e.path.join('.'), message: e.message })));
+    return;
+  }
+
+  const { userId, workDate, punchIn, punchOut, breakStart, breakEnd, status, isHolidayWork, notes } = parsed.data;
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    sendError(res, 404, 'NOT_FOUND', 'スタッフが見つかりません');
+    return;
+  }
+
+  const wd = new Date(workDate);
+  if (isNaN(wd.getTime())) {
+    sendError(res, 400, 'VALIDATION_ERROR', '日付が不正です');
+    return;
+  }
+
+  const pin = punchIn ? new Date(punchIn) : null;
+  const pout = punchOut ? new Date(punchOut) : null;
+  const bs = breakStart ? new Date(breakStart) : null;
+  const be = breakEnd ? new Date(breakEnd) : null;
+
+  let workMinutes: number | null = null;
+  let overtimeMinutes = 0;
+  let lateNightMinutes = 0;
+  if (pin && pout) {
+    workMinutes = calcWorkMinutes(pin, pout, bs, be);
+    overtimeMinutes = Math.max(0, workMinutes - 480);
+    lateNightMinutes = calcLateNightMinutes(pin, pout);
+  }
+
+  const resolvedStatus = status ?? (pin && pout ? 'PUNCHED_OUT' : pin ? 'PUNCHED_IN' : 'ABSENT');
+
+  const created = await prisma.attendance.create({
+    data: {
+      userId,
+      workDate: wd,
+      punchIn: pin,
+      punchOut: pout,
+      breakStart: bs,
+      breakEnd: be,
+      status: resolvedStatus,
+      isHolidayWork: isHolidayWork ?? resolvedStatus === 'HOLIDAY_WORK',
+      workMinutes,
+      overtimeMinutes,
+      lateNightMinutes,
+      notes: notes ?? null,
+      modifiedBy: req.user!.id,
+      modifyReason: '管理者による手動追加',
+    },
+  });
+
+  sendSuccess(res, created, 201);
+}));
 
 // PUT /api/v1/attendance/:id — admin correction
 router.put('/:id', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {

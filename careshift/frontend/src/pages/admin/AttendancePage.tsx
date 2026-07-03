@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Modal from '../../components/common/Modal';
-import { getAttendances, correctAttendance, exportAttendanceCsvUrl } from '../../api/attendance';
-import type { Attendance } from '../../types';
+import { getAttendances, createAttendance, correctAttendance, exportAttendanceCsvUrl } from '../../api/attendance';
+import { staffApi } from '../../api/staff';
+import type { Attendance, User } from '../../types';
 
 const STATUS_LABELS: Record<string, string> = {
   PUNCHED_IN: '出勤中',
@@ -62,6 +63,18 @@ export default function AttendancePage() {
   const [records, setRecords] = useState<(Attendance & { user?: { lastName: string; firstName: string } | null })[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterUserId, setFilterUserId] = useState('');
+  const [staffList, setStaffList] = useState<User[]>([]);
+
+  // Create modal (manual attendance entry)
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const defaultDate = !isNaN(year) && !isNaN(month) ? `${year}-${pad2(month)}-01` : '';
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    userId: '', date: defaultDate, punchIn: '09:00', punchOut: '18:00',
+    breakStart: '12:00', breakEnd: '13:00', status: 'PUNCHED_OUT', notes: '',
+  });
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   // Correction modal
   const [correcting, setCorrecting] = useState<Attendance | null>(null);
@@ -88,6 +101,53 @@ export default function AttendancePage() {
   }, [year, month, filterUserId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    staffApi.list({ is_active: 'true', per_page: 200 }).then(res =>
+      setStaffList(res.data.data.filter((u: User) => u.role !== 'ADMIN'))
+    );
+  }, []);
+
+  const openCreate = () => {
+    setCreateForm({
+      userId: staffList[0]?.id ?? '', date: defaultDate,
+      punchIn: '09:00', punchOut: '18:00', breakStart: '12:00', breakEnd: '13:00',
+      status: 'PUNCHED_OUT', notes: '',
+    });
+    setCreateError('');
+    setShowCreate(true);
+  };
+
+  const handleCreate = async () => {
+    if (!createForm.userId) { setCreateError('スタッフを選択してください'); return; }
+    if (!createForm.date) { setCreateError('日付を入力してください'); return; }
+    setCreating(true);
+    setCreateError('');
+    try {
+      const pin = createForm.punchIn ? buildDateTimeISO(createForm.date, createForm.punchIn) : null;
+      let pout = createForm.punchOut ? buildDateTimeISO(createForm.date, createForm.punchOut) : null;
+      // Overnight shift: if punch-out is not after punch-in, roll it to the next day
+      if (pin && pout && new Date(pout) <= new Date(pin)) {
+        pout = new Date(new Date(pout).getTime() + 24 * 60 * 60 * 1000).toISOString();
+      }
+      await createAttendance({
+        userId: createForm.userId,
+        workDate: createForm.date,
+        punchIn: pin,
+        punchOut: pout,
+        breakStart: createForm.breakStart ? buildDateTimeISO(createForm.date, createForm.breakStart) : null,
+        breakEnd: createForm.breakEnd ? buildDateTimeISO(createForm.date, createForm.breakEnd) : null,
+        status: createForm.status,
+        notes: createForm.notes || null,
+      });
+      setShowCreate(false);
+      load();
+    } catch {
+      setCreateError('登録に失敗しました');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const prevMonth = () => {
     const d = new Date(year, month - 2, 1);
@@ -180,6 +240,7 @@ export default function AttendancePage() {
           >
             CSV出力
           </a>
+          <button onClick={openCreate} className="btn-primary">＋勤怠を追加</button>
         </div>
       </div>
 
@@ -283,6 +344,72 @@ export default function AttendancePage() {
             <button onClick={() => setCorrecting(null)} className="btn-secondary" disabled={corrSaving}>キャンセル</button>
             <button onClick={handleCorrection} className="btn-primary" disabled={corrSaving}>
               {corrSaving ? '修正中...' : '修正を保存'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Create Modal (manual attendance entry) */}
+      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="勤怠を追加">
+        <div className="space-y-4">
+          {createError && <p className="text-danger text-sub">{createError}</p>}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sub font-medium text-text mb-1">スタッフ <span className="text-danger">*</span></label>
+              <select value={createForm.userId} onChange={e => setCreateForm(f => ({ ...f, userId: e.target.value }))} className="input w-full">
+                <option value="">選択してください</option>
+                {staffList.map(u => (
+                  <option key={u.id} value={u.id}>{u.lastName} {u.firstName}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sub font-medium text-text mb-1">日付 <span className="text-danger">*</span></label>
+              <input type="date" value={createForm.date} onChange={e => setCreateForm(f => ({ ...f, date: e.target.value }))} className="input w-full" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sub font-medium text-text mb-1">出勤時刻</label>
+              <input type="time" value={createForm.punchIn} onChange={e => setCreateForm(f => ({ ...f, punchIn: e.target.value }))} className="input w-full" />
+            </div>
+            <div>
+              <label className="block text-sub font-medium text-text mb-1">退勤時刻</label>
+              <input type="time" value={createForm.punchOut} onChange={e => setCreateForm(f => ({ ...f, punchOut: e.target.value }))} className="input w-full" />
+            </div>
+            <div>
+              <label className="block text-sub font-medium text-text mb-1">休憩開始</label>
+              <input type="time" value={createForm.breakStart} onChange={e => setCreateForm(f => ({ ...f, breakStart: e.target.value }))} className="input w-full" />
+            </div>
+            <div>
+              <label className="block text-sub font-medium text-text mb-1">休憩終了</label>
+              <input type="time" value={createForm.breakEnd} onChange={e => setCreateForm(f => ({ ...f, breakEnd: e.target.value }))} className="input w-full" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sub font-medium text-text mb-1">区分</label>
+            <select value={createForm.status} onChange={e => setCreateForm(f => ({ ...f, status: e.target.value }))} className="input w-full">
+              <option value="PUNCHED_OUT">通常勤務</option>
+              <option value="HOLIDAY_WORK">休日出勤</option>
+              <option value="PAID_LEAVE">有給</option>
+              <option value="ABSENT">欠勤</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sub font-medium text-text mb-1">備考</label>
+            <input type="text" value={createForm.notes} onChange={e => setCreateForm(f => ({ ...f, notes: e.target.value }))} className="input w-full" placeholder="任意" />
+          </div>
+
+          <p className="text-xs text-subtext">※ 実労働時間・残業・深夜時間は出退勤時刻から自動計算されます。夜勤（退勤が翌日）は退勤時刻が出勤時刻以前の場合、自動で翌日として扱います。</p>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={() => setShowCreate(false)} className="btn-secondary" disabled={creating}>キャンセル</button>
+            <button onClick={handleCreate} className="btn-primary" disabled={creating}>
+              {creating ? '登録中...' : '登録する'}
             </button>
           </div>
         </div>

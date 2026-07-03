@@ -341,7 +341,7 @@ export default function ShiftsPage() {
           <table className="text-xs border-collapse" style={{ minWidth: `${64 + daysInMonth * 44}px` }}>
             <thead>
               <tr className="bg-gray-50 border-b border-border">
-                <th className="sticky left-0 bg-gray-50 px-3 py-2 text-left font-medium text-subtext border-r border-border w-16 min-w-16">
+                <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2 text-left font-medium text-subtext border-r border-border w-16 min-w-16">
                   スタッフ
                 </th>
                 {days.map(d => {
@@ -361,7 +361,7 @@ export default function ShiftsPage() {
             <tbody>
               {staff.map(user => (
                 <tr key={user.id} className="border-b border-border hover:bg-gray-50">
-                  <td className="sticky left-0 bg-white border-r border-border px-3 py-2 font-medium text-text whitespace-nowrap">
+                  <td className="sticky left-0 z-10 bg-white border-r border-border px-3 py-2 font-medium text-text whitespace-nowrap">
                     {user.lastName} {user.firstName}
                   </td>
                   {days.map(d => {
