@@ -30,13 +30,17 @@ export default function SalarySettingsPage() {
   const [form, setForm] = useState<SalaryItemInput>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [dragId, setDragId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const res = await getSalaryItems();
       setItems(res.data);
+    } catch {
+      setLoadError('給与項目の読み込みに失敗しました。バックエンドのマイグレーション（prisma migrate）が適用されているかご確認ください。');
     } finally {
       setLoading(false);
     }
@@ -134,6 +138,10 @@ export default function SalarySettingsPage() {
         </div>
         <button onClick={openCreate} className="btn-primary">+ 項目を追加</button>
       </div>
+
+      {loadError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-danger text-sub">{loadError}</div>
+      )}
 
       <div className="card p-0 overflow-hidden">
         {loading ? (

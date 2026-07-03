@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 import { executePayroll } from '../services/payroll.service.js';
 import { renderPayslipHtml } from '../utils/payslipHtml.js';
 
@@ -41,7 +42,7 @@ async function loadPayrollDetail(id: string) {
 }
 
 // POST /api/v1/payroll/calculate
-router.post('/calculate', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.post('/calculate', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const parsed = z.object({
     year: z.number().int().min(2000).max(2100),
     month: z.number().int().min(1).max(12),
@@ -57,20 +58,20 @@ router.post('/calculate', authenticate, authorize('ADMIN'), async (req: Request,
     calculatedCount: result.processed.length,
     skippedLockedCount: result.skippedLocked.length,
   });
-});
+}));
 
 // GET /api/v1/payroll/my — staff: own confirmed payslips (must be before /:id)
-router.get('/my', authenticate, async (req: Request, res: Response): Promise<void> => {
+router.get('/my', authenticate, asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const payrolls = await prisma.payroll.findMany({
     where: { userId: req.user!.id, status: 'CONFIRMED' },
     orderBy: [{ year: 'desc' }, { month: 'desc' }],
     take: 12,
   });
   sendSuccess(res, payrolls);
-});
+}));
 
 // GET /api/v1/payroll/export — CSV (must be before /:id)
-router.get('/export', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.get('/export', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const year = parseInt(req.query.year as string);
   const month = parseInt(req.query.month as string);
   if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
@@ -109,10 +110,10 @@ router.get('/export', authenticate, authorize('ADMIN'), async (req: Request, res
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="payroll_${year}_${month}.csv"`);
   res.status(200).send('﻿' + csv); // BOM for Excel
-});
+}));
 
 // GET /api/v1/payroll?year=&month=
-router.get('/', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.get('/', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const year = parseInt(req.query.year as string);
   const month = parseInt(req.query.month as string);
   if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
@@ -136,10 +137,10 @@ router.get('/', authenticate, authorize('ADMIN'), async (req: Request, res: Resp
     user: userMap.get(p.userId) ?? null,
   }));
   sendSuccess(res, withUser);
-});
+}));
 
 // GET /api/v1/payroll/:id
-router.get('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
+router.get('/:id', authenticate, asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const data = await loadPayrollDetail(req.params.id);
   if (!data) {
     sendError(res, 404, 'NOT_FOUND', '給与明細が見つかりません');
@@ -159,10 +160,10 @@ router.get('/:id', authenticate, async (req: Request, res: Response): Promise<vo
     user: data.user,
     details: data.details,
   });
-});
+}));
 
 // PUT /api/v1/payroll/:id — manual correction of item amounts
-router.put('/:id', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const parsed = z.object({
     details: z.array(z.object({ id: z.string(), amount: z.number() })).min(1),
     modifyReason: z.string().min(1, '修正理由は必須です'),
@@ -215,10 +216,10 @@ router.put('/:id', authenticate, authorize('ADMIN'), async (req: Request, res: R
     totalDeduction: Number(updated.totalDeduction),
     netPay: Number(updated.netPay),
   });
-});
+}));
 
 // POST /api/v1/payroll/:id/confirm — lock the payslip
-router.post('/:id/confirm', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.post('/:id/confirm', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const payroll = await prisma.payroll.findUnique({ where: { id: req.params.id } });
   if (!payroll) {
     sendError(res, 404, 'NOT_FOUND', '給与明細が見つかりません');
@@ -233,10 +234,10 @@ router.post('/:id/confirm', authenticate, authorize('ADMIN'), async (req: Reques
     data: { status: 'CONFIRMED', confirmedAt: new Date(), confirmedBy: req.user!.id },
   });
   sendSuccess(res, { ...updated, netPay: Number(updated.netPay) });
-});
+}));
 
 // GET /api/v1/payroll/:id/pdf — printable payslip (HTML → browser print to PDF)
-router.get('/:id/pdf', authenticate, async (req: Request, res: Response): Promise<void> => {
+router.get('/:id/pdf', authenticate, asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const data = await loadPayrollDetail(req.params.id);
   if (!data) {
     sendError(res, 404, 'NOT_FOUND', '給与明細が見つかりません');
@@ -271,6 +272,6 @@ router.get('/:id/pdf', authenticate, async (req: Request, res: Response): Promis
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.status(200).send(html);
-});
+}));
 
 export default router;

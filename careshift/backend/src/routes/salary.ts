@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -18,13 +19,13 @@ const itemSchema = z.object({
 });
 
 // GET /api/v1/salary/items
-router.get('/items', authenticate, authorize('ADMIN'), async (_req: Request, res: Response): Promise<void> => {
+router.get('/items', authenticate, authorize('ADMIN'), asyncHandler(async (_req: Request, res: Response): Promise<void> => {
   const items = await prisma.salaryItem.findMany({ orderBy: { sortOrder: 'asc' } });
   sendSuccess(res, items);
-});
+}));
 
 // POST /api/v1/salary/items
-router.post('/items', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.post('/items', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const parsed = itemSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, 'VALIDATION_ERROR', '入力内容に誤りがあります',
@@ -51,10 +52,10 @@ router.post('/items', authenticate, authorize('ADMIN'), async (req: Request, res
     },
   });
   sendSuccess(res, item, 201);
-});
+}));
 
 // PUT /api/v1/salary/items/reorder — must be before /items/:id
-router.put('/items/reorder', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/items/reorder', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const parsed = z.object({ orderedIds: z.array(z.string()).min(1) }).safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, 'VALIDATION_ERROR', 'orderedIds は必須です');
@@ -67,10 +68,10 @@ router.put('/items/reorder', authenticate, authorize('ADMIN'), async (req: Reque
   );
   const items = await prisma.salaryItem.findMany({ orderBy: { sortOrder: 'asc' } });
   sendSuccess(res, items);
-});
+}));
 
 // PUT /api/v1/salary/items/:id
-router.put('/items/:id', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/items/:id', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const parsed = itemSchema.partial().safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, 'VALIDATION_ERROR', '入力内容に誤りがあります');
@@ -94,10 +95,10 @@ router.put('/items/:id', authenticate, authorize('ADMIN'), async (req: Request, 
     },
   });
   sendSuccess(res, updated);
-});
+}));
 
 // DELETE /api/v1/salary/items/:id
-router.delete('/items/:id', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.delete('/items/:id', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const existing = await prisma.salaryItem.findUnique({ where: { id: req.params.id } });
   if (!existing) {
     sendError(res, 404, 'NOT_FOUND', '給与項目が見つかりません');
@@ -105,6 +106,6 @@ router.delete('/items/:id', authenticate, authorize('ADMIN'), async (req: Reques
   }
   await prisma.salaryItem.delete({ where: { id: req.params.id } });
   sendSuccess(res, { message: '削除しました' });
-});
+}));
 
 export default router;

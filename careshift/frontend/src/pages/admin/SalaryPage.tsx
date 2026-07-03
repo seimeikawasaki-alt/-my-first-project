@@ -28,6 +28,7 @@ export default function SalaryPage() {
   const [staff, setStaff] = useState<User[]>([]);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [bulkCalculating, setBulkCalculating] = useState(false);
   const [rowCalcId, setRowCalcId] = useState<string | null>(null);
 
@@ -41,6 +42,7 @@ export default function SalaryPage() {
   const load = useCallback(async () => {
     if (isNaN(year) || isNaN(month)) return;
     setLoading(true);
+    setLoadError('');
     try {
       const [staffRes, payrollRes] = await Promise.all([
         staffApi.list({ is_active: 'true', per_page: 200 }),
@@ -48,6 +50,8 @@ export default function SalaryPage() {
       ]);
       setStaff(staffRes.data.data.filter((u: User) => u.role !== 'ADMIN'));
       setPayrolls(payrollRes.data);
+    } catch {
+      setLoadError('給与データの読み込みに失敗しました。バックエンドのマイグレーション（prisma migrate）が適用されているかご確認ください。');
     } finally {
       setLoading(false);
     }
@@ -187,6 +191,10 @@ export default function SalaryPage() {
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-danger text-sub">{loadError}</div>
+      )}
 
       <div className="card p-0 overflow-hidden">
         {loading ? (
