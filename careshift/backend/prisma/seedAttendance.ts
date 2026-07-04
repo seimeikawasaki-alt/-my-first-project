@@ -64,24 +64,27 @@ async function main() {
     const idx = parseInt(u.userCode.replace(/\D/g, ''), 10) || 0; // staff001 → 1
     const isNight = idx >= 41; // 夜勤専従グループ（041–050）
 
+    let nightNo = 0; // その月の夜勤回数（残業を付ける夜を決めるのに使用）
     for (let d = 1; d <= daysInMonth; d++) {
       const dow = new Date(Date.UTC(YEAR, MONTH - 1, d)).getUTCDay(); // 0=日, 6=土
 
       if (isNight) {
-        // 夜勤専従: 日曜を除き、1日おきに夜勤（22:00→翌07:00, 実働8h, 深夜7h）
-        const works = dow !== 0 && (d % 2 === idx % 2);
-        if (!works) continue;
+        // 夜勤専従: 日曜を除き1日おきに夜勤（22:00→翌07:00）。毎回 夜勤手当¥8,000。
+        if (dow === 0 || d % 2 !== idx % 2) continue;
+        nightNo += 1;
+        // 3回目・6回目の夜勤は2時間残業（22:00→翌09:00, 実働10h）
+        const extra = (nightNo === 3 || nightNo === 6) ? 120 : 0;
         allRows.push({
           userId: u.id,
           workDate: workDateOf(d),
           shiftTypeId: NIGHT_SHIFT.id,
           baseMinutes: NIGHT_SHIFT.base,
           isNightShift: true,
-          punchIn: jstTime(d, 22, 0),        // 22:00 JST
-          punchOut: jstTime(d + 1, 7, 0),    // 翌 07:00 JST
-          workMinutes: 480,                  // 9h拘束 − 1h休憩
-          overtimeMinutes: 0,
-          lateNightMinutes: 420,             // 22:00–05:00 = 7h
+          punchIn: jstTime(d, 22, 0),                              // 22:00 JST
+          punchOut: jstTime(d + 1, 7 + Math.floor(extra / 60), extra % 60), // 翌 07:00(+残業) JST
+          workMinutes: 480 + extra,                                // 8h + 残業
+          overtimeMinutes: extra,                                  // ベース(8h)超過分＝残業
+          lateNightMinutes: 420,                                   // 22:00–05:00 = 7h（延長分は深夜帯外）
           isHolidayWork: false,
           status: 'PUNCHED_OUT',
         });
@@ -108,8 +111,8 @@ async function main() {
           }
           continue;
         }
-        // 平日: 一部スタッフは水曜に2時間残業（実働10h）。d%7===3 は6月の水曜。
-        const extra = (idx % 3 === 0 && d % 7 === 3) ? 120 : 0;
+        // 平日: 全員 6/10・6/24（水曜）に2時間残業（実働10h）＝残業代の反映用
+        const extra = (dow === 3 && (d === 10 || d === 24)) ? 120 : 0;
         allRows.push({
           userId: u.id,
           workDate: workDateOf(d),
