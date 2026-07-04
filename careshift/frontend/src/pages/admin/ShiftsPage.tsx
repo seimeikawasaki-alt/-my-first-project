@@ -6,6 +6,7 @@ import { getShiftTypes } from '../../api/shiftTypes';
 import { getShiftRequests } from '../../api/shiftRequests';
 import { staffApi } from '../../api/staff';
 import { groupsApi } from '../../api/groups';
+import { toast } from '../../stores/toastStore';
 import type { Shift, ShiftType, ShiftRequest, User, Group, GenerationResult, StaffShiftStats } from '../../types';
 
 type CellShift = Shift & { user?: { lastName: string; firstName: string } | null };
@@ -130,10 +131,10 @@ export default function ShiftsPage() {
     setPublishing(true);
     try {
       const res = await publishShifts({ year, month, groupId: selectedGroup || undefined });
-      alert(`${res.data.publishedCount}件のシフトを公開しました`);
+      toast.success(`${res.data.publishedCount}件のシフトを公開しました`);
       load();
     } catch {
-      alert('公開に失敗しました');
+      toast.error('公開に失敗しました');
     } finally {
       setPublishing(false);
     }
@@ -145,10 +146,10 @@ export default function ShiftsPage() {
     setCopying(true);
     try {
       const res = await bulkCopyShifts({ year, month, groupId: selectedGroup || undefined });
-      alert(`${res.data.copiedCount}件のシフトをコピーしました`);
+      toast.success(`${res.data.copiedCount}件のシフトをコピーしました`);
       load();
     } catch {
-      alert('コピーに失敗しました');
+      toast.error('コピーに失敗しました');
     } finally {
       setCopying(false);
     }
@@ -175,7 +176,7 @@ export default function ShiftsPage() {
       }
       load();
     } catch {
-      alert('自動生成に失敗しました');
+      toast.error('自動生成に失敗しました');
     } finally {
       setGenerating(false);
     }

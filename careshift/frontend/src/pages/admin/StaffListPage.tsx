@@ -6,6 +6,7 @@ import { User, Group } from '../../types';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import Badge from '../../components/common/Badge';
 import Pagination from '../../components/common/Pagination';
+import EmptyState from '../../components/common/EmptyState';
 
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   FULL_TIME: '正社員',
@@ -140,7 +141,12 @@ export default function StaffListPage() {
         {isLoading ? (
           <div className="py-16"><LoadingSpinner /></div>
         ) : staff.length === 0 ? (
-          <div className="py-16 text-center text-subtext">スタッフが見つかりません</div>
+          <EmptyState
+            icon="🧑‍💼"
+            title="スタッフが見つかりません"
+            description="条件を変更するか、新しいスタッフを登録してください"
+            action={<button onClick={() => navigate('/admin/staff/new')} className="btn-primary">スタッフ登録</button>}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">

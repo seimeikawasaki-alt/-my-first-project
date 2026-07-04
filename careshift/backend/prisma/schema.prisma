@@ -44,6 +44,7 @@ model UserGroup {
   isLeader Boolean @default(false)
 
   @@id([userId, groupId])
+  @@index([groupId])
 }
 
 model ShiftType {
@@ -70,6 +71,9 @@ model Shift {
   createdBy   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([userId, shiftDate])
+  @@index([shiftDate, status])
 }
 
 model Attendance {
@@ -93,6 +97,9 @@ model Attendance {
   modifyReason     String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+
+  @@index([userId, workDate])
+  @@index([workDate])
 }
 
 model SalaryItem {
@@ -129,6 +136,7 @@ model Payroll {
   updatedAt      DateTime  @updatedAt
 
   @@unique([userId, year, month])
+  @@index([year, month])
 }
 
 model PayrollDetail {

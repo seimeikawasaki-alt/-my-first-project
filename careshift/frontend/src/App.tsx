@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from './stores/authStore';
 import LoadingSpinner from './components/common/LoadingSpinner';
+import ToastContainer from './components/common/Toast';
+import NotFoundPage from './pages/NotFoundPage';
 import AdminLayout from './components/layout/AdminLayout';
 import StaffLayout from './components/layout/StaffLayout';
 import LoginPage from './pages/LoginPage';
@@ -71,6 +73,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
 
@@ -119,7 +122,7 @@ export default function App() {
 
         {/* Root redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   );

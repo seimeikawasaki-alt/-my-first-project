@@ -7,6 +7,7 @@ import {
   getPayrolls, getPayroll, calculatePayroll, updatePayroll, confirmPayroll,
   payslipPdfUrl, payrollExportUrl,
 } from '../../api/payroll';
+import { toast } from '../../stores/toastStore';
 import type { User, Payroll, PayrollDetailRow, PayrollStatus } from '../../types';
 
 const STATUS_META: Record<PayrollStatus | 'NONE', { label: string; cls: string }> = {
@@ -75,10 +76,10 @@ export default function SalaryPage() {
     setBulkCalculating(true);
     try {
       const res = await calculatePayroll({ year, month });
-      alert(`${res.data.calculatedCount}件を計算しました${res.data.skippedLockedCount ? `（確定済み${res.data.skippedLockedCount}件は除外）` : ''}`);
+      toast.success(`${res.data.calculatedCount}件を計算しました${res.data.skippedLockedCount ? `（確定済み${res.data.skippedLockedCount}件は除外）` : ''}`);
       load();
     } catch {
-      alert('計算に失敗しました');
+      toast.error('計算に失敗しました');
     } finally {
       setBulkCalculating(false);
     }
@@ -147,10 +148,11 @@ export default function SalaryPage() {
     setSavingDetail(true);
     try {
       await confirmPayroll(detail.id);
+      toast.success('給与を確定しました');
       setDetail(null);
       load();
     } catch {
-      alert('確定に失敗しました');
+      toast.error('確定に失敗しました');
     } finally {
       setSavingDetail(false);
     }

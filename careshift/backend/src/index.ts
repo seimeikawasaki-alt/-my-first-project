@@ -18,19 +18,22 @@ import staffShiftStatsRouter from './routes/staffShiftStats.js';
 import salaryRouter from './routes/salary.js';
 import payrollRouter from './routes/payroll.js';
 import dashboardRouter from './routes/dashboard.js';
+import { authLimiter, generalLimiter } from './middleware/rateLimit.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? ['https://careshift.jp']
-    : ['http://localhost:5173', 'http://127.0.0.1:5173'],
-  credentials: true,
-}));
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+
+// Rate limiting: stricter on login, general cap on the rest of the API
+app.use('/api/v1', generalLimiter);
+app.use('/api/v1/auth/login', authLimiter);
 
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/staff', staffRouter);
@@ -47,9 +50,12 @@ app.use('/api/v1/salary', salaryRouter);
 app.use('/api/v1/payroll', payrollRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
 
-app.get('/api/v1/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+const APP_VERSION = '1.0.0';
+const healthPayload = () => ({ status: 'ok', version: APP_VERSION, timestamp: new Date().toISOString() });
+
+// Health checks for deployment liveness probes
+app.get('/api/health', (_req, res) => { res.json(healthPayload()); });
+app.get('/api/v1/health', (_req, res) => { res.json(healthPayload()); });
 
 // Central error handler: turn a thrown/passed error into a 500 response
 // instead of leaving the request hanging. The 4-arg signature (incl. `next`)

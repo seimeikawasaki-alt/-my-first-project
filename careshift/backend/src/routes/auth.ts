@@ -168,6 +168,15 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
     return;
   }
 
+  // New password must differ from the current one
+  const sameAsCurrent = await bcrypt.compare(newPassword, user.passwordHash);
+  if (sameAsCurrent) {
+    sendError(res, 400, 'VALIDATION_ERROR', '入力内容に誤りがあります', [
+      { field: 'newPassword', message: '現在のパスワードと異なるものを設定してください' },
+    ]);
+    return;
+  }
+
   const newHash = await bcrypt.hash(newPassword, 12);
   await prisma.user.update({
     where: { id: user.id },

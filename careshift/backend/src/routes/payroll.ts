@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { pdfLimiter } from '../middleware/rateLimit.js';
 import { executePayroll } from '../services/payroll.service.js';
 import { renderPayslipHtml } from '../utils/payslipHtml.js';
 
@@ -237,7 +238,7 @@ router.post('/:id/confirm', authenticate, authorize('ADMIN'), asyncHandler(async
 }));
 
 // GET /api/v1/payroll/:id/pdf — printable payslip (HTML → browser print to PDF)
-router.get('/:id/pdf', authenticate, asyncHandler(async (req: Request, res: Response): Promise<void> => {
+router.get('/:id/pdf', pdfLimiter, authenticate, asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const data = await loadPayrollDetail(req.params.id);
   if (!data) {
     sendError(res, 404, 'NOT_FOUND', '給与明細が見つかりません');
