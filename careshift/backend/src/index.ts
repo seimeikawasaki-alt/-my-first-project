@@ -17,6 +17,7 @@ import staffConstraintsRouter from './routes/staffConstraints.js';
 import staffShiftStatsRouter from './routes/staffShiftStats.js';
 import salaryRouter from './routes/salary.js';
 import payrollRouter from './routes/payroll.js';
+import dashboardRouter from './routes/dashboard.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,6 +45,7 @@ app.use('/api/v1/staff-constraints', staffConstraintsRouter);
 app.use('/api/v1/staff-shift-stats', staffShiftStatsRouter);
 app.use('/api/v1/salary', salaryRouter);
 app.use('/api/v1/payroll', payrollRouter);
+app.use('/api/v1/dashboard', dashboardRouter);
 
 app.get('/api/v1/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
