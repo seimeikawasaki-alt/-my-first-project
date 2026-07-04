@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Modal from '../../components/common/Modal';
-import { getAttendances, createAttendance, correctAttendance, exportAttendanceCsvUrl } from '../../api/attendance';
+import { getAttendances, createAttendance, correctAttendance, deleteAttendance, exportAttendanceCsvUrl } from '../../api/attendance';
 import { staffApi } from '../../api/staff';
 import { getShiftTypes } from '../../api/shiftTypes';
 import type { Attendance, User, ShiftType } from '../../types';
@@ -150,6 +150,17 @@ export default function AttendancePage() {
     }
   };
 
+  const handleDelete = async (rec: Attendance & { user?: { lastName: string; firstName: string } | null }) => {
+    const name = rec.user ? `${rec.user.lastName} ${rec.user.firstName}` : '';
+    if (!window.confirm(`${name} ${formatDate(rec.workDate)} の勤怠を削除しますか？`)) return;
+    try {
+      await deleteAttendance(rec.id);
+      load();
+    } catch {
+      alert('削除に失敗しました');
+    }
+  };
+
   const prevMonth = () => {
     const d = new Date(year, month - 2, 1);
     navigate(`/admin/attendance/${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`);
@@ -294,9 +305,12 @@ export default function AttendancePage() {
                       </span>
                     ) : '—'}
                   </td>
-                  <td className="py-3 text-right">
-                    <button onClick={() => openCorrection(r)} className="text-primary hover:underline text-xs">
+                  <td className="py-3 text-right whitespace-nowrap">
+                    <button onClick={() => openCorrection(r)} className="text-primary hover:underline text-xs mr-3">
                       修正
+                    </button>
+                    <button onClick={() => handleDelete(r)} className="text-danger hover:underline text-xs">
+                      削除
                     </button>
                   </td>
                 </tr>

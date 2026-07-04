@@ -505,4 +505,15 @@ router.put('/:id', authenticate, authorize('ADMIN'), asyncHandler(async (req: Re
   sendSuccess(res, updated);
 }));
 
+// DELETE /api/v1/attendance/:id — admin deletes an attendance record
+router.delete('/:id', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const existing = await prisma.attendance.findUnique({ where: { id: req.params.id } });
+  if (!existing) {
+    sendError(res, 404, 'NOT_FOUND', '打刻記録が見つかりません');
+    return;
+  }
+  await prisma.attendance.delete({ where: { id: req.params.id } });
+  sendSuccess(res, { message: '削除しました' });
+}));
+
 export default router;

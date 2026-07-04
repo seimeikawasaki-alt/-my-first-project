@@ -62,6 +62,11 @@ export async function correctAttendance(id: string, data: {
   return res.data;
 }
 
+export async function deleteAttendance(id: string) {
+  const res = await apiClient.delete<ApiResponse<{ message: string }>>(`/attendance/${id}`);
+  return res.data;
+}
+
 export async function getAttendanceSummary(params: { year: number; month: number }) {
   const res = await apiClient.get<ApiResponse<AttendanceSummary[]>>('/attendance/summary', { params });
   return res.data;
