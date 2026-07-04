@@ -31,6 +31,12 @@ export default function ShiftRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('PENDING');
   const [reviewingId, setReviewingId] = useState<string | null>(null);
 
+  // Extra filters (shown for non-審査中 views)
+  const [nameSearch, setNameSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'VACATION' | 'PREFERRED' | 'CHANGE'>('ALL');
+  const [monthFilter, setMonthFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -67,12 +73,34 @@ export default function ShiftRequestsPage() {
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
   };
 
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const ym = (dt: string) => { const d = new Date(dt); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; };
+  const ymd = (dt: string) => { const d = new Date(dt); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+
+  // 審査中タブは全件表示、それ以外は氏名・種別・月・日付で絞り込み可能
+  const showFilters = statusFilter !== 'PENDING';
+  const displayRequests = requests.filter(r => {
+    if (!showFilters) return true;
+    if (nameSearch.trim()) {
+      const nm = r.user ? `${r.user.lastName} ${r.user.firstName}` : '';
+      if (!nm.includes(nameSearch.trim())) return false;
+    }
+    if (typeFilter !== 'ALL' && r.requestType !== typeFilter) return false;
+    if (dateFilter) {
+      if (!r.targetDate || ymd(r.targetDate) !== dateFilter) return false;
+    } else if (monthFilter) {
+      const basis = r.targetDate ?? r.createdAt;
+      if (ym(basis) !== monthFilter) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-heading font-bold text-text">シフト申請一覧</h1>
-          <p className="text-sub text-subtext mt-1">全 {requests.length} 件</p>
+          <p className="text-sub text-subtext mt-1">{showFilters ? `${displayRequests.length} 件` : `全 ${requests.length} 件`}</p>
         </div>
       </div>
 
@@ -98,11 +126,40 @@ export default function ShiftRequestsPage() {
         ))}
       </div>
 
+      {/* Extra filters for 承認済 / 却下 / すべて */}
+      {showFilters && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <input
+            type="text"
+            value={nameSearch}
+            onChange={e => setNameSearch(e.target.value)}
+            placeholder="スタッフ名で検索"
+            className="input py-2 text-sub w-40"
+          />
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as typeof typeFilter)} className="input py-2 text-sub w-auto">
+            <option value="ALL">種別 : すべて</option>
+            <option value="VACATION">休暇希望</option>
+            <option value="PREFERRED">希望シフト</option>
+            <option value="CHANGE">シフト変更申請</option>
+          </select>
+          <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="input py-2 text-sub w-auto" title="希望日の月で絞り込み" />
+          <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="input py-2 text-sub w-auto" title="希望日で絞り込み" />
+          {(nameSearch || typeFilter !== 'ALL' || monthFilter || dateFilter) && (
+            <button
+              onClick={() => { setNameSearch(''); setTypeFilter('ALL'); setMonthFilter(''); setDateFilter(''); }}
+              className="text-subtext hover:text-text text-sub px-1"
+            >
+              クリア
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="card p-0 overflow-hidden">
         {loading ? (
           <div className="py-16"><LoadingSpinner /></div>
-        ) : requests.length === 0 ? (
-          <div className="py-16 text-center text-subtext">申請がありません</div>
+        ) : displayRequests.length === 0 ? (
+          <div className="py-16 text-center text-subtext">{requests.length === 0 ? '申請がありません' : '該当する申請がありません'}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -119,7 +176,7 @@ export default function ShiftRequestsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {requests.map(r => {
+                {displayRequests.map(r => {
                   const shiftType = r.shiftTypeId ? shiftTypeMap.get(r.shiftTypeId) : null;
                   return (
                     <tr key={r.id} className="hover:bg-gray-50 transition-colors">

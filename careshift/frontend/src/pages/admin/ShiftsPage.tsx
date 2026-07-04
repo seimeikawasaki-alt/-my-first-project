@@ -7,6 +7,7 @@ import { getShiftRequests } from '../../api/shiftRequests';
 import { staffApi } from '../../api/staff';
 import { groupsApi } from '../../api/groups';
 import { toast } from '../../stores/toastStore';
+import { matchStaff, compareKana } from '../../utils/staffSort';
 import type { Shift, ShiftType, ShiftRequest, User, Group, GenerationResult, StaffShiftStats } from '../../types';
 
 type CellShift = Shift & { user?: { lastName: string; firstName: string } | null };
@@ -32,6 +33,7 @@ export default function ShiftsPage() {
   const [staff, setStaff] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState('');
+  const [staffSearch, setStaffSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [copying, setCopying] = useState(false);
@@ -200,6 +202,24 @@ export default function ShiftsPage() {
   const primaryRequest = (list: ShiftRequest[]): ShiftRequest =>
     list.find(r => r.requestType === 'VACATION') ?? list[0];
 
+  // Row order: group leader first, then by role, then by hire date (入社順), then kana
+  const roleRank = (u: User): number => {
+    if (u.groups?.some(g => g.id === selectedGroup && g.isLeader)) return 0;
+    if (u.role === 'GROUP_LEADER') return 1;
+    return 2;
+  };
+  const displayStaff = staff
+    .filter(u => matchStaff(u, staffSearch))
+    .slice()
+    .sort((a, b) => {
+      const r = roleRank(a) - roleRank(b);
+      if (r !== 0) return r;
+      const ha = a.hireDate ? new Date(a.hireDate).getTime() : Infinity;
+      const hb = b.hireDate ? new Date(b.hireDate).getTime() : Infinity;
+      if (ha !== hb) return ha - hb;
+      return compareKana(a, b);
+    });
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -219,6 +239,13 @@ export default function ShiftsPage() {
           >
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
+          <input
+            type="text"
+            value={staffSearch}
+            onChange={e => setStaffSearch(e.target.value)}
+            placeholder="スタッフ検索"
+            className="input py-2 text-sub w-36"
+          />
           <button onClick={handleCopy} disabled={copying} className="btn-secondary">
             {copying ? 'コピー中...' : '前月からコピー'}
           </button>
@@ -360,7 +387,7 @@ export default function ShiftsPage() {
               </tr>
             </thead>
             <tbody>
-              {staff.map(user => (
+              {displayStaff.map(user => (
                 <tr key={user.id} className="border-b border-border hover:bg-gray-50">
                   <td className="sticky left-0 z-10 bg-white border-r border-border px-3 py-2 font-medium text-text whitespace-nowrap">
                     {user.lastName} {user.firstName}

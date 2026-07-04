@@ -6,6 +6,7 @@ import { getShiftTypes } from '../../api/shiftTypes';
 import { getShiftRequirements, bulkUpsertShiftRequirements } from '../../api/shiftRequirements';
 import { getGroupShiftConfig, upsertGroupShiftConfig } from '../../api/groupShiftConfig';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { matchStaff, compareKana } from '../../utils/staffSort';
 import type { Group, ShiftType, ShiftRequirement, GroupShiftConfig, User } from '../../types';
 
 const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
@@ -51,6 +52,7 @@ export default function GroupDetailPage() {
   const [addSkill, setAddSkill] = useState('NORMAL');
   const [addIsLeader, setAddIsLeader] = useState(false);
   const [memberMsg, setMemberMsg] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -182,7 +184,10 @@ export default function GroupDetailPage() {
   };
 
   const memberIds = new Set(group?.members?.map(m => m.id) ?? []);
-  const availableStaff = allStaff.filter(s => !memberIds.has(s.id));
+  const availableStaff = allStaff
+    .filter(s => !memberIds.has(s.id) && matchStaff(s, memberSearch))
+    .slice()
+    .sort(compareKana);
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'info', label: '基本情報' },
@@ -438,8 +443,15 @@ export default function GroupDetailPage() {
             <p className="text-sub font-medium mb-3">メンバーを追加</p>
             <div className="flex gap-2 flex-wrap items-end">
               <div className="flex-1 min-w-48">
-                <select value={addUserId} onChange={e => setAddUserId(e.target.value)} className="form-input">
-                  <option value="">スタッフを選択...</option>
+                <input
+                  type="text"
+                  value={memberSearch}
+                  onChange={e => setMemberSearch(e.target.value)}
+                  placeholder="スタッフ検索（氏名・フリガナ・ID）"
+                  className="form-input mb-2"
+                />
+                <select value={addUserId} onChange={e => setAddUserId(e.target.value)} className="form-input" size={memberSearch ? 5 : 1}>
+                  <option value="">スタッフを選択...（{availableStaff.length}名）</option>
                   {availableStaff.map(s => (
                     <option key={s.id} value={s.id}>{s.lastName} {s.firstName} ({s.userCode})</option>
                   ))}

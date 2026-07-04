@@ -8,6 +8,7 @@ import {
   payslipPdfUrl, payrollExportUrl,
 } from '../../api/payroll';
 import { toast } from '../../stores/toastStore';
+import { matchStaff, compareKana } from '../../utils/staffSort';
 import type { User, Payroll, PayrollDetailRow, PayrollStatus } from '../../types';
 
 const STATUS_META: Record<PayrollStatus | 'NONE', { label: string; cls: string }> = {
@@ -32,6 +33,7 @@ export default function SalaryPage() {
   const [loadError, setLoadError] = useState('');
   const [bulkCalculating, setBulkCalculating] = useState(false);
   const [rowCalcId, setRowCalcId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   // Detail modal
   const [detail, setDetail] = useState<Payroll | null>(null);
@@ -61,6 +63,12 @@ export default function SalaryPage() {
   useEffect(() => { load(); }, [load]);
 
   const payrollByUser = new Map(payrolls.map(p => [p.userId, p]));
+
+  // あいうえお順 + 名前検索
+  const displayStaff = staff
+    .filter(u => matchStaff(u, search))
+    .slice()
+    .sort(compareKana);
 
   const prevMonth = () => {
     const d = new Date(year, month - 2, 1);
@@ -186,7 +194,14 @@ export default function SalaryPage() {
           <h1 className="text-heading font-bold text-text">{year}年{month}月 給与計算</h1>
           <button onClick={nextMonth} className="btn-secondary px-3">→</button>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="スタッフ検索"
+            className="input py-2 text-sub w-36"
+          />
           <button onClick={() => window.open(payrollExportUrl(year, month), '_blank')} className="btn-secondary">CSV出力</button>
           <button onClick={handleBulk} disabled={bulkCalculating} className="btn-primary">
             {bulkCalculating ? '計算中...' : '一括計算'}
@@ -201,8 +216,8 @@ export default function SalaryPage() {
       <div className="card p-0 overflow-hidden">
         {loading ? (
           <div className="py-16"><LoadingSpinner /></div>
-        ) : staff.length === 0 ? (
-          <p className="py-16 text-center text-subtext">スタッフがいません</p>
+        ) : displayStaff.length === 0 ? (
+          <p className="py-16 text-center text-subtext">{staff.length === 0 ? 'スタッフがいません' : '該当するスタッフがいません'}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sub">
@@ -218,7 +233,7 @@ export default function SalaryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {staff.map(u => {
+                {displayStaff.map(u => {
                   const p = payrollByUser.get(u.id);
                   const meta = STATUS_META[p?.status ?? 'NONE'];
                   return (

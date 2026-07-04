@@ -4,6 +4,7 @@ import Modal from '../../components/common/Modal';
 import { getAttendances, createAttendance, correctAttendance, deleteAttendance, exportAttendanceCsvUrl } from '../../api/attendance';
 import { staffApi } from '../../api/staff';
 import { getShiftTypes } from '../../api/shiftTypes';
+import { matchStaff, compareKana } from '../../utils/staffSort';
 import type { Attendance, User, ShiftType } from '../../types';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -63,7 +64,8 @@ export default function AttendancePage() {
 
   const [records, setRecords] = useState<(Attendance & { user?: { lastName: string; firstName: string } | null })[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterUserId, setFilterUserId] = useState('');
+  const [nameSearch, setNameSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [staffList, setStaffList] = useState<User[]>([]);
   const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([]);
 
@@ -97,12 +99,12 @@ export default function AttendancePage() {
     if (isNaN(year) || isNaN(month)) return;
     setLoading(true);
     try {
-      const res = await getAttendances({ year, month, userId: filterUserId || undefined });
+      const res = await getAttendances({ year, month });
       setRecords(res.data);
     } finally {
       setLoading(false);
     }
-  }, [year, month, filterUserId]);
+  }, [year, month]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -222,11 +224,31 @@ export default function AttendancePage() {
     }
   };
 
-  const userIds = [...new Set(records.map(r => r.userId))];
-  const userNames = new Map<string, string>();
-  records.forEach(r => {
-    if (r.user) userNames.set(r.userId, `${r.user.lastName} ${r.user.firstName}`);
-  });
+  // Staff kana lookup for あいうえお sorting + richer name search
+  const dateKeyOf = (iso: string): string => {
+    const d = new Date(iso);
+    return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+  };
+  const staffById = new Map(staffList.map(u => [u.id, u]));
+  const displayRecords = records
+    .filter(r => {
+      if (dateFilter && dateKeyOf(r.workDate) !== dateFilter) return false;
+      if (nameSearch.trim()) {
+        const u = staffById.get(r.userId);
+        const nm = r.user ? `${r.user.lastName} ${r.user.firstName}` : '';
+        const hit = (u && matchStaff(u, nameSearch)) || nm.includes(nameSearch.trim());
+        if (!hit) return false;
+      }
+      return true;
+    })
+    .slice()
+    .sort((a, b) => {
+      const ua = staffById.get(a.userId);
+      const ub = staffById.get(b.userId);
+      const k = ua && ub ? compareKana(ua, ub) : 0;
+      if (k !== 0) return k;
+      return new Date(a.workDate).getTime() - new Date(b.workDate).getTime();
+    });
 
   return (
     <div className="p-6">
@@ -239,17 +261,23 @@ export default function AttendancePage() {
           </h1>
           <button onClick={nextMonth} className="btn-secondary px-3">→</button>
         </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={filterUserId}
-            onChange={e => setFilterUserId(e.target.value)}
-            className="input py-2 text-sub"
-          >
-            <option value="">全スタッフ</option>
-            {userIds.map(uid => (
-              <option key={uid} value={uid}>{userNames.get(uid) ?? uid}</option>
-            ))}
-          </select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="text"
+            value={nameSearch}
+            onChange={e => setNameSearch(e.target.value)}
+            placeholder="スタッフ検索"
+            className="input py-2 text-sub w-36"
+          />
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value)}
+            className="input py-2 text-sub w-auto"
+          />
+          {dateFilter && (
+            <button onClick={() => setDateFilter('')} className="text-subtext hover:text-text text-sub px-1">日付クリア</button>
+          )}
           <a
             href={exportAttendanceCsvUrl(year, month)}
             download={`attendance_${year}_${month}.csv`}
@@ -265,8 +293,10 @@ export default function AttendancePage() {
       <div className="card overflow-x-auto">
         {loading ? (
           <p className="text-center text-subtext py-12">読み込み中...</p>
-        ) : records.length === 0 ? (
-          <p className="text-center text-subtext py-12">打刻記録がありません</p>
+        ) : displayRecords.length === 0 ? (
+          <p className="text-center text-subtext py-12">
+            {records.length === 0 ? '打刻記録がありません' : '該当する記録がありません'}
+          </p>
         ) : (
           <table className="w-full text-sub">
             <thead>
@@ -283,7 +313,7 @@ export default function AttendancePage() {
               </tr>
             </thead>
             <tbody>
-              {records.map(r => (
+              {displayRecords.map(r => (
                 <tr key={r.id} className="border-b border-border last:border-0 hover:bg-gray-50">
                   <td className="py-3 pr-4 font-medium text-text">
                     {r.user ? `${r.user.lastName} ${r.user.firstName}` : r.userId}
