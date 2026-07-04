@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Modal from '../../components/common/Modal';
 import { getAttendances, createAttendance, correctAttendance, exportAttendanceCsvUrl } from '../../api/attendance';
 import { staffApi } from '../../api/staff';
-import type { Attendance, User } from '../../types';
+import { getShiftTypes } from '../../api/shiftTypes';
+import type { Attendance, User, ShiftType } from '../../types';
 
 const STATUS_LABELS: Record<string, string> = {
   PUNCHED_IN: '出勤中',
@@ -64,13 +65,14 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(true);
   const [filterUserId, setFilterUserId] = useState('');
   const [staffList, setStaffList] = useState<User[]>([]);
+  const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([]);
 
   // Create modal (manual attendance entry)
   const pad2 = (n: number) => String(n).padStart(2, '0');
   const defaultDate = !isNaN(year) && !isNaN(month) ? `${year}-${pad2(month)}-01` : '';
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
-    userId: '', date: defaultDate, punchIn: '09:00', punchOut: '18:00',
+    userId: '', date: defaultDate, shiftTypeId: '', punchIn: '09:00', punchOut: '18:00',
     breakStart: '12:00', breakEnd: '13:00', status: 'PUNCHED_OUT', notes: '',
   });
   const [creating, setCreating] = useState(false);
@@ -79,10 +81,12 @@ export default function AttendancePage() {
   // Correction modal
   const [correcting, setCorrecting] = useState<Attendance | null>(null);
   const [corrForm, setCorrForm] = useState({
+    shiftTypeId: '',
     punchIn: '',
     punchOut: '',
     breakStart: '',
     breakEnd: '',
+    status: '',
     notes: '',
     modifyReason: '',
   });
@@ -106,11 +110,12 @@ export default function AttendancePage() {
     staffApi.list({ is_active: 'true', per_page: 200 }).then(res =>
       setStaffList(res.data.data.filter((u: User) => u.role !== 'ADMIN'))
     );
+    getShiftTypes().then(res => setShiftTypes(res.data.filter(t => t.isActive)));
   }, []);
 
   const openCreate = () => {
     setCreateForm({
-      userId: staffList[0]?.id ?? '', date: defaultDate,
+      userId: staffList[0]?.id ?? '', date: defaultDate, shiftTypeId: shiftTypes[0]?.id ?? '',
       punchIn: '09:00', punchOut: '18:00', breakStart: '12:00', breakEnd: '13:00',
       status: 'PUNCHED_OUT', notes: '',
     });
@@ -124,17 +129,13 @@ export default function AttendancePage() {
     setCreating(true);
     setCreateError('');
     try {
-      const pin = createForm.punchIn ? buildDateTimeISO(createForm.date, createForm.punchIn) : null;
-      let pout = createForm.punchOut ? buildDateTimeISO(createForm.date, createForm.punchOut) : null;
-      // Overnight shift: if punch-out is not after punch-in, roll it to the next day
-      if (pin && pout && new Date(pout) <= new Date(pin)) {
-        pout = new Date(new Date(pout).getTime() + 24 * 60 * 60 * 1000).toISOString();
-      }
+      // Overnight (夜勤) is handled server-side: if punch-out ≤ punch-in it rolls to the next day.
       await createAttendance({
         userId: createForm.userId,
         workDate: createForm.date,
-        punchIn: pin,
-        punchOut: pout,
+        shiftTypeId: createForm.shiftTypeId || null,
+        punchIn: createForm.punchIn ? buildDateTimeISO(createForm.date, createForm.punchIn) : null,
+        punchOut: createForm.punchOut ? buildDateTimeISO(createForm.date, createForm.punchOut) : null,
         breakStart: createForm.breakStart ? buildDateTimeISO(createForm.date, createForm.breakStart) : null,
         breakEnd: createForm.breakEnd ? buildDateTimeISO(createForm.date, createForm.breakEnd) : null,
         status: createForm.status,
@@ -161,10 +162,12 @@ export default function AttendancePage() {
   const openCorrection = (rec: Attendance) => {
     setCorrecting(rec);
     setCorrForm({
+      shiftTypeId: rec.shiftTypeId ?? '',
       punchIn: toTimeInput(rec.punchIn),
       punchOut: toTimeInput(rec.punchOut),
       breakStart: toTimeInput(rec.breakStart),
       breakEnd: toTimeInput(rec.breakEnd),
+      status: rec.status ?? '',
       notes: rec.notes ?? '',
       modifyReason: '',
     });
@@ -189,10 +192,13 @@ export default function AttendancePage() {
     setCorrError('');
     try {
       await correctAttendance(correcting.id, {
+        shiftTypeId: corrForm.shiftTypeId || null,
         punchIn: buildDateTimeISO(correcting.workDate, corrForm.punchIn),
         punchOut: buildDateTimeISO(correcting.workDate, corrForm.punchOut),
         breakStart: corrForm.breakStart ? buildDateTimeISO(correcting.workDate, corrForm.breakStart) : null,
         breakEnd: corrForm.breakEnd ? buildDateTimeISO(correcting.workDate, corrForm.breakEnd) : null,
+        status: corrForm.status || undefined,
+        isHolidayWork: corrForm.status ? corrForm.status === 'HOLIDAY_WORK' : undefined,
         notes: corrForm.notes || null,
         modifyReason: corrForm.modifyReason,
       });
@@ -307,6 +313,24 @@ export default function AttendancePage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
+              <label className="block text-sub font-medium text-text mb-1">勤怠種類（ベース勤務）</label>
+              <select value={corrForm.shiftTypeId} onChange={e => setCorrForm(f => ({ ...f, shiftTypeId: e.target.value }))} className="input w-full">
+                <option value="">指定なし（8時間基準）</option>
+                {shiftTypes.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}（{t.startTime}〜{t.endTime}）</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sub font-medium text-text mb-1">区分</label>
+              <select value={corrForm.status} onChange={e => setCorrForm(f => ({ ...f, status: e.target.value }))} className="input w-full">
+                <option value="PUNCHED_OUT">通常勤務</option>
+                <option value="HOLIDAY_WORK">休日出勤</option>
+                <option value="PAID_LEAVE">有給</option>
+                <option value="ABSENT">欠勤</option>
+              </select>
+            </div>
+            <div>
               <label className="block text-sub font-medium text-text mb-1">出勤時刻</label>
               <input type="time" value={corrForm.punchIn} onChange={e => setCorrForm(f => ({ ...f, punchIn: e.target.value }))} className="input w-full" />
             </div>
@@ -367,6 +391,15 @@ export default function AttendancePage() {
             <div>
               <label className="block text-sub font-medium text-text mb-1">日付 <span className="text-danger">*</span></label>
               <input type="date" value={createForm.date} onChange={e => setCreateForm(f => ({ ...f, date: e.target.value }))} className="input w-full" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sub font-medium text-text mb-1">勤怠種類（ベース勤務・超過分が残業）</label>
+              <select value={createForm.shiftTypeId} onChange={e => setCreateForm(f => ({ ...f, shiftTypeId: e.target.value }))} className="input w-full">
+                <option value="">指定なし（8時間基準）</option>
+                {shiftTypes.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}（{t.startTime}〜{t.endTime}）{t.isNightShift ? ' 🌙夜勤' : ''}</option>
+                ))}
+              </select>
             </div>
           </div>
 

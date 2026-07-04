@@ -34,6 +34,7 @@ export async function getMyAttendances(params: { year: number; month: number }) 
 export async function createAttendance(data: {
   userId: string;
   workDate: string;
+  shiftTypeId?: string | null;
   punchIn?: string | null;
   punchOut?: string | null;
   breakStart?: string | null;
@@ -47,10 +48,13 @@ export async function createAttendance(data: {
 }
 
 export async function correctAttendance(id: string, data: {
+  shiftTypeId?: string | null;
   punchIn?: string;
   punchOut?: string;
   breakStart?: string | null;
   breakEnd?: string | null;
+  status?: string;
+  isHolidayWork?: boolean;
   notes?: string | null;
   modifyReason: string;
 }) {

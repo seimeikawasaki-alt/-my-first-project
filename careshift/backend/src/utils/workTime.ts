@@ -33,6 +33,35 @@ export function calcLateNightMinutes(punchIn: Date, punchOut: Date): number {
   return total;
 }
 
+/**
+ * Scheduled ("base") work minutes for a shift type: the span from start to end
+ * (rolling over midnight for overnight shifts) minus the break. Time worked
+ * beyond this base is treated as overtime.
+ */
+export function shiftBaseMinutes(shiftType: {
+  startTime: string;
+  endTime: string;
+  breakMinutes?: number | null;
+  isOvernight?: boolean;
+}): number {
+  const [sh, sm] = shiftType.startTime.split(':').map(Number);
+  const [eh, em] = shiftType.endTime.split(':').map(Number);
+  let span = (eh * 60 + em) - (sh * 60 + sm);
+  if (span <= 0 || shiftType.isOvernight) span += 24 * 60; // crosses midnight
+  return Math.max(0, span - (shiftType.breakMinutes ?? 0));
+}
+
+/**
+ * If punch-out is not after punch-in, the shift crosses midnight — roll the
+ * punch-out forward by one day so the duration is correct.
+ */
+export function rollOvernight(punchIn: Date, punchOut: Date): Date {
+  if (punchOut.getTime() <= punchIn.getTime()) {
+    return new Date(punchOut.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return punchOut;
+}
+
 /** Net worked minutes = (out − in) − break. */
 export function calcWorkMinutes(
   punchIn: Date,

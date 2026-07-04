@@ -208,15 +208,17 @@ async function main() {
     { code: 'OVERTIME', name: '残業手当', itemType: 'INCOME', calcType: 'AUTO', sortOrder: 2 },
     { code: 'LATE_NIGHT', name: '深夜手当', itemType: 'INCOME', calcType: 'AUTO', sortOrder: 3 },
     { code: 'HOLIDAY', name: '休日出勤手当', itemType: 'INCOME', calcType: 'AUTO', sortOrder: 4 },
-    { code: 'COMMUTE', name: '通勤手当', itemType: 'INCOME', calcType: 'MANUAL', sortOrder: 5 },
-    { code: 'OTHER_ALLOWANCE', name: 'その他手当', itemType: 'INCOME', calcType: 'MANUAL', sortOrder: 6 },
+    // 夜勤手当: 1回の夜勤につき定額（calcFormula に金額を保持＝設定変更可）
+    { code: 'NIGHT_ALLOWANCE', name: '夜勤手当', itemType: 'INCOME', calcType: 'AUTO', calcFormula: '8000', sortOrder: 5 },
+    { code: 'COMMUTE', name: '通勤手当', itemType: 'INCOME', calcType: 'MANUAL', sortOrder: 6 },
+    { code: 'OTHER_ALLOWANCE', name: 'その他手当', itemType: 'INCOME', calcType: 'MANUAL', sortOrder: 7 },
     // 控除項目
-    { code: 'HEALTH_INSURANCE', name: '健康保険料', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 7 },
-    { code: 'PENSION', name: '厚生年金', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 8 },
+    { code: 'HEALTH_INSURANCE', name: '健康保険料', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 8 },
+    { code: 'PENSION', name: '厚生年金', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 9 },
     // 雇用保険料は総支給額 × 0.006（calcFormula に率を保持＝設定変更可）
-    { code: 'EMPLOYMENT_INSURANCE', name: '雇用保険料', itemType: 'DEDUCTION', calcType: 'AUTO', calcFormula: '0.006', sortOrder: 9 },
-    { code: 'INCOME_TAX', name: '所得税', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 10 },
-    { code: 'RESIDENT_TAX', name: '住民税', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 11 },
+    { code: 'EMPLOYMENT_INSURANCE', name: '雇用保険料', itemType: 'DEDUCTION', calcType: 'AUTO', calcFormula: '0.006', sortOrder: 10 },
+    { code: 'INCOME_TAX', name: '所得税', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 11 },
+    { code: 'RESIDENT_TAX', name: '住民税', itemType: 'DEDUCTION', calcType: 'MANUAL', sortOrder: 12 },
   ];
 
   // Clear legacy salary items from earlier seeds, then create the canonical set

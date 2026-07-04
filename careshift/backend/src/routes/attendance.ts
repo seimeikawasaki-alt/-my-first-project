@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
-import { calcLateNightMinutes, calcWorkMinutes } from '../utils/workTime.js';
+import { calcLateNightMinutes, calcWorkMinutes, shiftBaseMinutes, rollOvernight } from '../utils/workTime.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
@@ -12,6 +12,7 @@ const prisma = new PrismaClient();
 const attendanceCreateSchema = z.object({
   userId: z.string().min(1, 'スタッフは必須です'),
   workDate: z.string().min(1, '日付は必須です'),
+  shiftTypeId: z.string().optional().nullable(),
   punchIn: z.string().datetime().optional().nullable(),
   punchOut: z.string().datetime().optional().nullable(),
   breakStart: z.string().datetime().optional().nullable(),
@@ -20,6 +21,37 @@ const attendanceCreateSchema = z.object({
   isHolidayWork: z.boolean().optional(),
   notes: z.string().optional().nullable(),
 });
+
+/**
+ * Compute work/overtime/late-night from punch times against a base shift.
+ * Overtime is the portion worked beyond the selected 勤怠種類's scheduled hours.
+ */
+async function computeTimes(
+  shiftTypeId: string | null | undefined,
+  pin: Date | null,
+  pout: Date | null,
+  bs: Date | null,
+  be: Date | null,
+): Promise<{ workMinutes: number | null; overtimeMinutes: number; lateNightMinutes: number; baseMinutes: number | null; isNightShift: boolean }> {
+  let baseMinutes: number | null = null;
+  let isNightShift = false;
+  if (shiftTypeId) {
+    const st = await prisma.shiftType.findUnique({ where: { id: shiftTypeId } });
+    if (st) {
+      baseMinutes = shiftBaseMinutes(st);
+      isNightShift = st.isNightShift;
+    }
+  }
+  if (!pin || !pout) {
+    return { workMinutes: null, overtimeMinutes: 0, lateNightMinutes: 0, baseMinutes, isNightShift };
+  }
+  const outRolled = rollOvernight(pin, pout);
+  const workMinutes = calcWorkMinutes(pin, outRolled, bs, be);
+  const base = baseMinutes ?? 480; // default 8h when no 勤怠種類 selected
+  const overtimeMinutes = Math.max(0, workMinutes - base);
+  const lateNightMinutes = calcLateNightMinutes(pin, outRolled);
+  return { workMinutes, overtimeMinutes, lateNightMinutes, baseMinutes, isNightShift };
+}
 
 // Get today's work date (midnight UTC+9)
 function getTodayWorkDate(): Date {
@@ -33,10 +65,13 @@ function getTodayWorkDate(): Date {
 }
 
 const attendanceCorrectionSchema = z.object({
+  shiftTypeId: z.string().optional().nullable(),
   punchIn: z.string().datetime().optional(),
   punchOut: z.string().datetime().optional(),
   breakStart: z.string().datetime().optional().nullable(),
   breakEnd: z.string().datetime().optional().nullable(),
+  status: z.string().optional(),
+  isHolidayWork: z.boolean().optional(),
   notes: z.string().optional().nullable(),
   modifyReason: z.string().min(1, '修正理由は必須です'),
 });
@@ -371,7 +406,7 @@ router.post('/', authenticate, authorize('ADMIN'), asyncHandler(async (req: Requ
     return;
   }
 
-  const { userId, workDate, punchIn, punchOut, breakStart, breakEnd, status, isHolidayWork, notes } = parsed.data;
+  const { userId, workDate, shiftTypeId, punchIn, punchOut, breakStart, breakEnd, status, isHolidayWork, notes } = parsed.data;
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
@@ -390,30 +425,25 @@ router.post('/', authenticate, authorize('ADMIN'), asyncHandler(async (req: Requ
   const bs = breakStart ? new Date(breakStart) : null;
   const be = breakEnd ? new Date(breakEnd) : null;
 
-  let workMinutes: number | null = null;
-  let overtimeMinutes = 0;
-  let lateNightMinutes = 0;
-  if (pin && pout) {
-    workMinutes = calcWorkMinutes(pin, pout, bs, be);
-    overtimeMinutes = Math.max(0, workMinutes - 480);
-    lateNightMinutes = calcLateNightMinutes(pin, pout);
-  }
-
+  const t = await computeTimes(shiftTypeId, pin, pout, bs, be);
   const resolvedStatus = status ?? (pin && pout ? 'PUNCHED_OUT' : pin ? 'PUNCHED_IN' : 'ABSENT');
 
   const created = await prisma.attendance.create({
     data: {
       userId,
       workDate: wd,
+      shiftTypeId: shiftTypeId ?? null,
+      baseMinutes: t.baseMinutes,
+      isNightShift: t.isNightShift,
       punchIn: pin,
       punchOut: pout,
       breakStart: bs,
       breakEnd: be,
       status: resolvedStatus,
       isHolidayWork: isHolidayWork ?? resolvedStatus === 'HOLIDAY_WORK',
-      workMinutes,
-      overtimeMinutes,
-      lateNightMinutes,
+      workMinutes: t.workMinutes,
+      overtimeMinutes: t.overtimeMinutes,
+      lateNightMinutes: t.lateNightMinutes,
       notes: notes ?? null,
       modifiedBy: req.user!.id,
       modifyReason: '管理者による手動追加',
@@ -424,7 +454,7 @@ router.post('/', authenticate, authorize('ADMIN'), asyncHandler(async (req: Requ
 }));
 
 // PUT /api/v1/attendance/:id — admin correction
-router.put('/:id', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const parsed = attendanceCorrectionSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, 'VALIDATION_ERROR', '入力内容に誤りがあります',
@@ -439,40 +469,40 @@ router.put('/:id', authenticate, authorize('ADMIN'), async (req: Request, res: R
     return;
   }
 
-  const { punchIn, punchOut, breakStart, breakEnd, notes, modifyReason } = parsed.data;
+  const { shiftTypeId, punchIn, punchOut, breakStart, breakEnd, status, isHolidayWork, notes, modifyReason } = parsed.data;
 
   const newPunchIn = punchIn ? new Date(punchIn) : existing.punchIn;
   const newPunchOut = punchOut ? new Date(punchOut) : existing.punchOut;
   const newBreakStart = breakStart !== undefined ? (breakStart ? new Date(breakStart) : null) : existing.breakStart;
   const newBreakEnd = breakEnd !== undefined ? (breakEnd ? new Date(breakEnd) : null) : existing.breakEnd;
+  // Keep the previously selected 勤怠種類 unless the request changes it
+  const newShiftTypeId = shiftTypeId !== undefined ? shiftTypeId : existing.shiftTypeId;
 
-  let workMinutes: number | null = existing.workMinutes;
-  let overtimeMinutes: number = existing.overtimeMinutes;
-  let lateNightMinutes: number = existing.lateNightMinutes;
-
-  if (newPunchIn && newPunchOut) {
-    workMinutes = calcWorkMinutes(newPunchIn, newPunchOut, newBreakStart, newBreakEnd);
-    overtimeMinutes = Math.max(0, workMinutes - 480);
-    lateNightMinutes = calcLateNightMinutes(newPunchIn, newPunchOut);
-  }
+  // Recompute against the (possibly new) base shift, handling overnight shifts
+  const t = await computeTimes(newShiftTypeId, newPunchIn ?? null, newPunchOut ?? null, newBreakStart, newBreakEnd);
 
   const updated = await prisma.attendance.update({
     where: { id: req.params.id },
     data: {
+      shiftTypeId: newShiftTypeId,
+      baseMinutes: t.baseMinutes,
+      isNightShift: t.isNightShift,
       punchIn: newPunchIn,
       punchOut: newPunchOut,
       breakStart: newBreakStart,
       breakEnd: newBreakEnd,
+      status: status !== undefined ? status : existing.status,
+      isHolidayWork: isHolidayWork !== undefined ? isHolidayWork : existing.isHolidayWork,
       notes: notes !== undefined ? notes : existing.notes,
-      workMinutes,
-      overtimeMinutes,
-      lateNightMinutes,
+      workMinutes: newPunchIn && newPunchOut ? t.workMinutes : existing.workMinutes,
+      overtimeMinutes: newPunchIn && newPunchOut ? t.overtimeMinutes : existing.overtimeMinutes,
+      lateNightMinutes: newPunchIn && newPunchOut ? t.lateNightMinutes : existing.lateNightMinutes,
       modifiedBy: req.user!.id,
       modifyReason,
     },
   });
 
   sendSuccess(res, updated);
-});
+}));
 
 export default router;

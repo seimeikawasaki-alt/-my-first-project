@@ -21,6 +21,9 @@ function workDateOf(day: number): Date {
 interface Row {
   userId: string;
   workDate: Date;
+  shiftTypeId: string;
+  baseMinutes: number;
+  isNightShift: boolean;
   punchIn: Date;
   punchOut: Date;
   workMinutes: number;
@@ -29,6 +32,10 @@ interface Row {
   isHolidayWork: boolean;
   status: string;
 }
+
+// 既定のシフト種別（seed.ts で作成済み）: base=所定労働時間（実働8h）
+const DAY_SHIFT = { id: 'shift-type-1', base: 480 };   // 日勤 08:00–17:00
+const NIGHT_SHIFT = { id: 'shift-type-2', base: 480 }; // 夜勤 22:00–翌07:00
 
 async function main() {
   const daysInMonth = new Date(Date.UTC(YEAR, MONTH, 0)).getUTCDate();
@@ -67,6 +74,9 @@ async function main() {
         allRows.push({
           userId: u.id,
           workDate: workDateOf(d),
+          shiftTypeId: NIGHT_SHIFT.id,
+          baseMinutes: NIGHT_SHIFT.base,
+          isNightShift: true,
           punchIn: jstTime(d, 22, 0),        // 22:00 JST
           punchOut: jstTime(d + 1, 7, 0),    // 翌 07:00 JST
           workMinutes: 480,                  // 9h拘束 − 1h休憩
@@ -84,6 +94,9 @@ async function main() {
             allRows.push({
               userId: u.id,
               workDate: workDateOf(d),
+              shiftTypeId: DAY_SHIFT.id,
+              baseMinutes: DAY_SHIFT.base,
+              isNightShift: false,
               punchIn: jstTime(d, 9, 0),
               punchOut: jstTime(d, 18, 0),
               workMinutes: 480,
@@ -95,15 +108,18 @@ async function main() {
           }
           continue;
         }
-        // 平日: 一部スタッフは週1で2時間残業（実働10h）
-        const extra = (idx % 3 === 0 && d % 7 === 0) ? 120 : 0;
+        // 平日: 一部スタッフは水曜に2時間残業（実働10h）。d%7===3 は6月の水曜。
+        const extra = (idx % 3 === 0 && d % 7 === 3) ? 120 : 0;
         allRows.push({
           userId: u.id,
           workDate: workDateOf(d),
+          shiftTypeId: DAY_SHIFT.id,
+          baseMinutes: DAY_SHIFT.base,
+          isNightShift: false,
           punchIn: jstTime(d, 9, 0),
           punchOut: jstTime(d, 18 + Math.floor(extra / 60), extra % 60),
           workMinutes: 480 + extra,
-          overtimeMinutes: extra, // 日次の参考値（給与は月40h基準で別計算）
+          overtimeMinutes: extra, // ベース(8h)超過分＝残業
           lateNightMinutes: 0,
           isHolidayWork: false,
           status: 'PUNCHED_OUT',

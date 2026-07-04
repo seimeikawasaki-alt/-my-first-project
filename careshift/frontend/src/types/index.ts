@@ -115,6 +115,9 @@ export interface Attendance {
   breakStart?: string | null;
   breakEnd?: string | null;
   status?: AttendanceStatus | null;
+  shiftTypeId?: string | null;
+  baseMinutes?: number | null;
+  isNightShift?: boolean;
   workMinutes?: number | null;
   overtimeMinutes: number;
   lateNightMinutes: number;

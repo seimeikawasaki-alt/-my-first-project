@@ -81,6 +81,9 @@ model Attendance {
   breakStart       DateTime?
   breakEnd         DateTime?
   status           String?
+  shiftTypeId      String?
+  baseMinutes      Int?
+  isNightShift     Boolean   @default(false)
   workMinutes      Int?
   overtimeMinutes  Int       @default(0)
   lateNightMinutes Int       @default(0)

@@ -23,7 +23,7 @@ export async function calcWorkSummary(userId: string, year: number, month: numbe
   const end = new Date(Date.UTC(year, month, 1));
   const records = await prisma.attendance.findMany({
     where: { userId, workDate: { gte: start, lt: end } },
-    select: { workMinutes: true, lateNightMinutes: true, isHolidayWork: true },
+    select: { workMinutes: true, overtimeMinutes: true, lateNightMinutes: true, isHolidayWork: true, isNightShift: true },
   });
   return summarizeAttendance(records);
 }

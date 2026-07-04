@@ -6,21 +6,21 @@
 
 // ---- Constants ------------------------------------------------------------
 
-/** Monthly overtime threshold: weekday minutes beyond this are overtime. */
-export const OVERTIME_THRESHOLD_MINUTES = 40 * 60; // 月40時間
 /** Standard monthly working hours, used to derive an hourly rate for 月給制. */
 export const STANDARD_MONTHLY_HOURS = 160;
 /** Default 雇用保険料 rate (総支給額 × rate); overridable per item. */
 export const DEFAULT_EMPLOYMENT_INSURANCE_RATE = 0.006;
+/** Default 夜勤手当: paid per night shift worked; overridable per item. */
+export const DEFAULT_NIGHT_ALLOWANCE = 8000;
 
 // ---- Types ----------------------------------------------------------------
 
 export interface WorkSummary {
   workDays: number;
   totalWorkMinutes: number;
-  /** Weekday minutes up to the 40h/month threshold (paid as 基本給). */
+  /** Worked minutes within the base scheduled hours (paid as 基本給). */
   regularMinutes: number;
-  /** Weekday minutes beyond the 40h/month threshold. */
+  /** Worked minutes beyond each shift's base scheduled hours (残業). */
   overtimeMinutes: number;
   /** Late-night (22:00–05:00) minutes — an additive 0.25 premium. */
   lateNightMinutes: number;
@@ -28,12 +28,17 @@ export interface WorkSummary {
   holidayWorkMinutes: number;
   /** Minutes worked on 法定休日 (no source flag yet → 0). */
   legalHolidayWorkMinutes: number;
+  /** Number of night shifts worked (for the per-shift 夜勤手当). */
+  nightShiftCount: number;
 }
 
 export interface AttendanceLike {
   workMinutes: number | null;
+  /** Per-shift overtime already computed at punch/edit time (beyond base). */
+  overtimeMinutes: number;
   lateNightMinutes: number;
   isHolidayWork: boolean;
+  isNightShift?: boolean;
 }
 
 export interface SalaryItemLike {
@@ -79,34 +84,44 @@ export function floorYen(n: number): number {
 
 /**
  * Aggregate a month's attendance rows into a WorkSummary.
- * Overtime follows the spec: weekday minutes over 40h/month. Holiday work is
- * tracked separately and excluded from the overtime threshold.
+ * Overtime is per-shift: the minutes each day worked beyond its base scheduled
+ * hours (precomputed as `overtimeMinutes` at punch/edit time). Holiday work is
+ * tracked separately (paid at the holiday rate, no overtime split).
  */
 export function summarizeAttendance(records: AttendanceLike[]): WorkSummary {
-  let weekdayMinutes = 0;
+  let regularMinutes = 0;
+  let overtimeMinutes = 0;
   let holidayWorkMinutes = 0;
   let lateNightMinutes = 0;
+  let totalWorkMinutes = 0;
   let workDays = 0;
+  let nightShiftCount = 0;
 
   for (const r of records) {
     const wm = r.workMinutes ?? 0;
+    const ot = Math.max(0, Math.min(r.overtimeMinutes ?? 0, wm)); // never exceed worked
     if (wm > 0) workDays += 1;
-    if (r.isHolidayWork) holidayWorkMinutes += wm;
-    else weekdayMinutes += wm;
+    if (r.isNightShift && wm > 0) nightShiftCount += 1;
     lateNightMinutes += r.lateNightMinutes ?? 0;
-  }
+    totalWorkMinutes += wm;
 
-  const overtimeMinutes = Math.max(0, weekdayMinutes - OVERTIME_THRESHOLD_MINUTES);
-  const regularMinutes = weekdayMinutes - overtimeMinutes;
+    if (r.isHolidayWork) {
+      holidayWorkMinutes += wm;
+    } else {
+      overtimeMinutes += ot;
+      regularMinutes += wm - ot;
+    }
+  }
 
   return {
     workDays,
-    totalWorkMinutes: weekdayMinutes + holidayWorkMinutes,
+    totalWorkMinutes,
     regularMinutes,
     overtimeMinutes,
     lateNightMinutes,
     holidayWorkMinutes,
     legalHolidayWorkMinutes: 0,
+    nightShiftCount,
   };
 }
 
@@ -148,6 +163,11 @@ export function calcPayrollItems(
         return hourly * 1.35 * minutesToHours2(summary.holidayWorkMinutes);
       case 'LEGAL_HOLIDAY':
         return hourly * 1.6 * minutesToHours2(summary.legalHolidayWorkMinutes);
+      case 'NIGHT_ALLOWANCE': {
+        // 夜勤手当: fixed amount per night shift worked
+        const per = item.calcFormula ? parseFloat(item.calcFormula) : DEFAULT_NIGHT_ALLOWANCE;
+        return summary.nightShiftCount * (Number.isFinite(per) ? per : DEFAULT_NIGHT_ALLOWANCE);
+      }
       default:
         return 0;
     }
