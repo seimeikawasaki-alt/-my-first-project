@@ -12,9 +12,13 @@ const navItems = [
   { label: 'シフト管理', icon: '📅', to: `/admin/shifts/${year}/${month}` },
   { label: 'シフト設定', icon: '🔧', to: '/admin/shift-settings' },
   { label: 'シフト申請一覧', icon: '📝', to: '/admin/shift-requests' },
+  { label: 'シフト交代', icon: '🔄', to: '/admin/shift-swap' },
   { label: '勤怠管理', icon: '⏰', to: `/admin/attendance/${year}/${month}` },
+  { label: '有給休暇管理', icon: '🏖', to: '/admin/paid-leave' },
+  { label: '残業管理', icon: '⚠️', to: '/admin/overtime' },
   { label: '給与管理', icon: '💴', to: `/admin/salary/${year}/${month}` },
   { label: '給与項目設定', icon: '🧾', to: '/admin/salary/settings' },
+  { label: '監査ログ', icon: '📋', to: '/admin/audit-logs' },
   { label: '設定', icon: '⚙️', to: '/admin/settings' },
 ];
 

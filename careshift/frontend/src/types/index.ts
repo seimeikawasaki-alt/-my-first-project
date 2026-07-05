@@ -300,3 +300,106 @@ export interface Payroll {
   user?: { id: string; userCode: string; lastName: string; firstName: string; employmentType?: string } | null;
   details?: PayrollDetailRow[];
 }
+
+// ---- Phase 5: 有給 / 36協定 / シフト交代 / 監査ログ ----------------------
+
+export type ComplianceRisk = 'SAFE' | 'WARNING' | 'CRITICAL';
+export interface ComplianceStatus {
+  required: boolean;
+  usedDays: number;
+  remainingRequired: number;
+  daysUntilDeadline: number;
+  riskLevel: ComplianceRisk;
+}
+
+export interface PaidLeaveGrant {
+  id: string;
+  userId: string;
+  grantDate: string;
+  grantedDays: number;
+  expiryDate: string;
+  usedDays: number;
+  remainingDays: number;
+  fiscalYear: number;
+}
+
+export interface PaidLeaveUsage {
+  id: string;
+  userId: string;
+  grantId: string;
+  usedDate: string;
+  days: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason?: string | null;
+  createdAt: string;
+}
+
+export interface PaidLeaveBalance {
+  remainingDays: number;
+  grants: PaidLeaveGrant[];
+  usages: PaidLeaveUsage[];
+  compliance: ComplianceStatus & { grantDate?: string | null; grantedDays?: number };
+}
+
+export interface PaidLeaveSummaryRow {
+  userId: string;
+  name: string;
+  grantedDays: number;
+  usedDays: number;
+  remainingDays: number;
+  expiryDate: string | null;
+  compliance: ComplianceStatus;
+}
+
+export type AlertLevel = 'NORMAL' | 'WARNING' | 'EXCEEDED';
+export interface OvertimeConfig {
+  monthlyLimitHours: number;
+  yearlyLimitHours: number;
+  specialMonthlyLimit: number;
+  specialYearlyLimit: number;
+  warningThresholdRate: number;
+}
+export interface OvertimeStatusRow {
+  userId: string;
+  name: string;
+  monthlyOvertimeHours: number;
+  yearlyTotalHours: number;
+  alertLevel: AlertLevel;
+}
+
+export interface ShiftSwapResponseRow {
+  id: string;
+  swapRequestId: string;
+  userId: string;
+  status: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  name?: string;
+}
+export interface ShiftSwapRequest {
+  id: string;
+  originalUserId: string;
+  shiftId: string;
+  reason: string;
+  urgency: 'URGENT' | 'PLANNED';
+  status: 'OPEN' | 'MATCHED' | 'APPROVED' | 'CANCELLED';
+  replacementUserId?: string | null;
+  approvedAt?: string | null;
+  createdAt: string;
+  originalName?: string;
+  shift?: Shift | null;
+  responses?: ShiftSwapResponseRow[];
+  alreadyResponded?: boolean;
+}
+
+export interface AuditLog {
+  id: string;
+  userId: string;
+  action: string;
+  targetType?: string | null;
+  targetId?: string | null;
+  beforeValue?: string | null;
+  afterValue?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  createdAt: string;
+  user?: { lastName: string; firstName: string; userCode: string } | null;
+}

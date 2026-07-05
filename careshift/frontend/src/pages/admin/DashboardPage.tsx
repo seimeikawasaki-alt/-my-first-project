@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { getTodayDashboard, type TodayDashboard, type DashboardStaff } from '../../api/dashboard';
+import { getOvertimeAlerts } from '../../api/overtime';
 import { Skeleton } from '../../components/common/Skeleton';
 import EmptyState from '../../components/common/EmptyState';
 
@@ -25,6 +26,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<TodayDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState<Panel>(null);
+  const [overtimeAlertCount, setOvertimeAlertCount] = useState(0);
 
   const today = now.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
@@ -36,6 +38,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
+    // 残業アラート（失敗しても致命的でない）
+    try {
+      const alerts = await getOvertimeAlerts({ year: now.getFullYear(), month: now.getMonth() + 1 });
+      setOvertimeAlertCount(alerts.data.length);
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -76,6 +83,15 @@ export default function DashboardPage() {
           おはようございます、<span className="font-bold">{user?.lastName} {user?.firstName}</span> 様
         </p>
       </div>
+
+      {/* Overtime alert banner */}
+      {overtimeAlertCount > 0 && (
+        <button onClick={() => navigate('/admin/overtime')} className="w-full flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 mb-4 text-left hover:bg-amber-100 transition-colors">
+          <span className="text-lg">⚠️</span>
+          <span className="flex-1 text-sub text-amber-800 font-medium">残業時間が上限に近いスタッフが{overtimeAlertCount}名います</span>
+          <span className="text-amber-700">›</span>
+        </button>
+      )}
 
       {/* Row 1: today's status */}
       <h2 className="text-card-title font-bold text-text mb-3">本日の状況</h2>

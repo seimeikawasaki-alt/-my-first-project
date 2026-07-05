@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { getMyDashboard, type MyDashboard } from '../../api/dashboard';
+import { getAvailableSwaps, respondToSwap } from '../../api/shiftSwap';
+import { getShiftTypes } from '../../api/shiftTypes';
+import { toast } from '../../stores/toastStore';
 import { Skeleton } from '../../components/common/Skeleton';
+import type { ShiftSwapRequest, ShiftType } from '../../types';
 
 const now = new Date();
 
@@ -20,6 +24,8 @@ export default function StaffDashboardPage() {
   const [data, setData] = useState<MyDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [dismissAlert, setDismissAlert] = useState(false);
+  const [swaps, setSwaps] = useState<ShiftSwapRequest[]>([]);
+  const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([]);
 
   const today = now.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
   const hour = now.getHours();
@@ -28,14 +34,27 @@ export default function StaffDashboardPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getMyDashboard();
-      setData(res.data);
+      const [dash, sw, types] = await Promise.all([getMyDashboard(), getAvailableSwaps(), getShiftTypes()]);
+      setData(dash.data);
+      setSwaps(sw.data.filter(s => !s.alreadyResponded));
+      setShiftTypes(types.data);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const typeMap = new Map(shiftTypes.map(t => [t.id, t]));
+  const respond = async (id: string) => {
+    try {
+      await respondToSwap(id);
+      toast.success('応募しました。管理者の承認をお待ちください');
+      setSwaps(prev => prev.filter(s => s.id !== id));
+    } catch {
+      toast.error('応募に失敗しました');
+    }
+  };
 
   const missing = data?.missingPunchOut;
   const missingLabel = missing ? (() => {
@@ -65,6 +84,21 @@ export default function StaffDashboardPage() {
             <button onClick={() => setDismissAlert(true)} className="text-amber-700 font-bold px-1">×</button>
           </div>
         )}
+
+        {/* Shift-swap recruitment banners */}
+        {swaps.map(s => {
+          const st = s.shift?.shiftTypeId ? typeMap.get(s.shift.shiftTypeId) : null;
+          const d = s.shift ? new Date(s.shift.shiftDate) : null;
+          const dateLabel = d ? `${d.getUTCMonth() + 1}/${d.getUTCDate()}` : '';
+          return (
+            <div key={s.id} className="rounded-xl bg-amber-50 border border-amber-300 px-4 py-3 mb-3">
+              <p className="text-sub text-amber-800">
+                📢 {dateLabel} {st?.name ?? 'シフト'}の代理を募集中です（{s.originalName}さんが欠勤）
+              </p>
+              <button onClick={() => respond(s.id)} className="btn-primary w-full mt-2 py-2">自分が入れます</button>
+            </div>
+          );
+        })}
 
         {/* Greeting hero */}
         <div className="rounded-2xl bg-gradient-to-br from-primary to-blue-500 text-white p-5 mb-5 shadow-sm">

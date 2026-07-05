@@ -19,6 +19,10 @@ import ShiftRequestsPage from './pages/admin/ShiftRequestsPage';
 import GroupDetailPage from './pages/admin/GroupDetailPage';
 import SalaryPage from './pages/admin/SalaryPage';
 import SalarySettingsPage from './pages/admin/SalarySettingsPage';
+import PaidLeavePage from './pages/admin/PaidLeavePage';
+import OvertimePage from './pages/admin/OvertimePage';
+import ShiftSwapPage from './pages/admin/ShiftSwapPage';
+import AuditLogsPage from './pages/admin/AuditLogsPage';
 import StaffDashboardPage from './pages/staff/StaffDashboardPage';
 import PunchPage from './pages/staff/PunchPage';
 import MyShiftsPage from './pages/staff/MyShiftsPage';
@@ -26,6 +30,7 @@ import MyAttendancePage from './pages/staff/MyAttendancePage';
 import ShiftRequestPage from './pages/staff/ShiftRequestPage';
 import ProfilePage from './pages/staff/ProfilePage';
 import PayslipsPage from './pages/staff/PayslipsPage';
+import StaffPaidLeavePage from './pages/staff/PaidLeavePage';
 
 function RequireAuth({ children, requiredRole }: {
   children: React.ReactNode;
@@ -99,6 +104,10 @@ export default function App() {
           <Route path="groups/:id" element={<GroupDetailPage />} />
           <Route path="salary/settings" element={<SalarySettingsPage />} />
           <Route path="salary/:year/:month" element={<SalaryPage />} />
+          <Route path="paid-leave" element={<PaidLeavePage />} />
+          <Route path="overtime" element={<OvertimePage />} />
+          <Route path="shift-swap" element={<ShiftSwapPage />} />
+          <Route path="audit-logs" element={<AuditLogsPage />} />
         </Route>
 
         {/* Staff routes with bottom nav layout */}
@@ -118,6 +127,7 @@ export default function App() {
           <Route path="shift-request" element={<ShiftRequestPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="payslips" element={<PayslipsPage />} />
+          <Route path="paid-leave" element={<StaffPaidLeavePage />} />
         </Route>
 
         {/* Root redirect */}

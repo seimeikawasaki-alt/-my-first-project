@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMyShifts } from '../../api/shifts';
 import { getShiftTypes } from '../../api/shiftTypes';
+import { createShiftSwap } from '../../api/shiftSwap';
+import { toast } from '../../stores/toastStore';
+import Modal from '../../components/common/Modal';
 import type { Shift, ShiftType } from '../../types';
 
 const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
@@ -23,6 +26,9 @@ export default function MyShiftsPage() {
   const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [swapShiftId, setSwapShiftId] = useState<string | null>(null);
+  const [swapForm, setSwapForm] = useState({ reason: '体調不良', urgency: 'URGENT' as 'URGENT' | 'PLANNED' });
+  const [swapBusy, setSwapBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,6 +45,22 @@ export default function MyShiftsPage() {
   }, [year, month]);
 
   useEffect(() => { load(); }, [load]);
+
+  const submitSwap = async () => {
+    if (!swapShiftId) return;
+    if (!swapForm.reason.trim()) { toast.error('理由を入力してください'); return; }
+    setSwapBusy(true);
+    try {
+      await createShiftSwap({ shiftId: swapShiftId, reason: swapForm.reason, urgency: swapForm.urgency });
+      toast.success('交代を申請しました。同グループのスタッフに通知されます');
+      setSwapShiftId(null);
+      setSwapForm({ reason: '体調不良', urgency: 'URGENT' });
+    } catch {
+      toast.error('申請に失敗しました');
+    } finally {
+      setSwapBusy(false);
+    }
+  };
 
   const prevMonth = () => {
     if (month === 1) { setYear(y => y - 1); setMonth(12); }
@@ -244,6 +266,11 @@ export default function MyShiftsPage() {
                       ) : (
                         <p className="text-sub text-subtext">シフトなし（休日）</p>
                       )}
+                      {selectedShift && (
+                        <button onClick={() => setSwapShiftId(selectedShift.id)} className="btn-secondary mt-3 text-sub py-2">
+                          欠勤・交代を申請
+                        </button>
+                      )}
                     </div>
                   );
                 })()}
@@ -332,6 +359,38 @@ export default function MyShiftsPage() {
           </>
         )}
       </main>
+
+      <Modal isOpen={!!swapShiftId} onClose={() => setSwapShiftId(null)} title="欠勤・交代を申請">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sub font-medium text-text mb-2">理由</label>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {['体調不良', '家庭の事情'].map(r => (
+                <button key={r} onClick={() => setSwapForm(f => ({ ...f, reason: r }))}
+                  className={`py-2 rounded-lg border text-xs ${swapForm.reason === r ? 'border-primary bg-blue-50 text-primary font-medium' : 'border-border text-subtext'}`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <input type="text" value={swapForm.reason} onChange={e => setSwapForm(f => ({ ...f, reason: e.target.value }))}
+              className="input w-full" placeholder="理由を入力" />
+          </div>
+          <div>
+            <label className="block text-sub font-medium text-text mb-2">緊急度</label>
+            <div className="flex gap-2">
+              {([['URGENT', '当日（今すぐ代わりが必要）'], ['PLANNED', '数日前（余裕あり）']] as const).map(([v, l]) => (
+                <button key={v} onClick={() => setSwapForm(f => ({ ...f, urgency: v }))}
+                  className={`flex-1 py-2 rounded-lg border text-xs ${swapForm.urgency === v ? 'border-primary bg-blue-50 text-primary font-medium' : 'border-border text-subtext'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button onClick={submitSwap} disabled={swapBusy} className="w-full btn-primary py-3">
+            {swapBusy ? '申請中...' : '申請する'}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

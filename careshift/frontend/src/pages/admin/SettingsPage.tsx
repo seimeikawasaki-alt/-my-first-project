@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '../../components/common/Modal';
 import { getShiftTypes, createShiftType, updateShiftType, deleteShiftType } from '../../api/shiftTypes';
+import OvertimeConfigCard from '../../components/admin/OvertimeConfigCard';
 import type { ShiftType } from '../../types';
 
 const EMPTY_FORM = {
@@ -150,6 +151,8 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      <OvertimeConfigCard />
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'シフト種別を編集' : 'シフト種別を追加'}>
         <div className="space-y-4">

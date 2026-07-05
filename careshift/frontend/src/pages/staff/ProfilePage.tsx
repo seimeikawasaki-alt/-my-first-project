@@ -121,6 +121,13 @@ export default function ProfilePage() {
             <span className="flex items-center gap-3 text-sub text-text"><span className="text-lg">📝</span>シフト申請</span>
             <span className="text-subtext">›</span>
           </button>
+          <button
+            onClick={() => navigate('/staff/paid-leave')}
+            className="w-full flex items-center justify-between px-3 py-3 rounded-lg hover:bg-gray-50 transition-colors border-t border-border"
+          >
+            <span className="flex items-center gap-3 text-sub text-text"><span className="text-lg">🏖</span>有給休暇</span>
+            <span className="text-subtext">›</span>
+          </button>
         </div>
 
         {/* Groups */}
