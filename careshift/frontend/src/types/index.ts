@@ -344,11 +344,13 @@ export interface PaidLeaveBalance {
 export interface PaidLeaveSummaryRow {
   userId: string;
   name: string;
+  nameKana?: string;
   grantedDays: number;
   usedDays: number;
   remainingDays: number;
   expiryDate: string | null;
   compliance: ComplianceStatus;
+  latestGrantId?: string | null;
 }
 
 export type AlertLevel = 'NORMAL' | 'WARNING' | 'EXCEEDED';
@@ -362,6 +364,7 @@ export interface OvertimeConfig {
 export interface OvertimeStatusRow {
   userId: string;
   name: string;
+  nameKana?: string;
   monthlyOvertimeHours: number;
   yearlyTotalHours: number;
   alertLevel: AlertLevel;

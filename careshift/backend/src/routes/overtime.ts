@@ -21,9 +21,12 @@ function ym(req: Request): { year: number; month: number } | null {
 async function withNames(rows: { userId: string }[]) {
   const users = await prisma.user.findMany({
     where: { id: { in: rows.map(r => r.userId) } },
-    select: { id: true, lastName: true, firstName: true },
+    select: { id: true, lastName: true, firstName: true, lastNameKana: true, firstNameKana: true },
   });
-  const map = new Map(users.map(u => [u.id, `${u.lastName} ${u.firstName}`]));
+  const map = new Map(users.map(u => [u.id, {
+    name: `${u.lastName} ${u.firstName}`,
+    nameKana: `${u.lastNameKana ?? ''} ${u.firstNameKana ?? ''}`.trim(),
+  }]));
   return map;
 }
 
@@ -51,7 +54,7 @@ router.get('/alerts', authenticate, authorize('ADMIN'), asyncHandler(async (req:
   if (!period) { sendError(res, 400, 'VALIDATION_ERROR', 'month が不正です'); return; }
   const rows = (await computeOvertimeStatus(period.year, period.month)).filter(r => r.alertLevel !== 'NORMAL');
   const names = await withNames(rows);
-  sendSuccess(res, rows.map(r => ({ ...r, name: names.get(r.userId) ?? '' })));
+  sendSuccess(res, rows.map(r => ({ ...r, name: names.get(r.userId)?.name ?? '', nameKana: names.get(r.userId)?.nameKana ?? '' })));
 }));
 
 // GET /api/v1/overtime/status/:userId — 個別
@@ -70,7 +73,7 @@ router.get('/status', authenticate, authorize('ADMIN'), asyncHandler(async (req:
   const rows = await computeOvertimeStatus(period.year, period.month);
   const names = await withNames(rows);
   const config = await getOvertimeConfig();
-  sendSuccess(res, { config, rows: rows.map(r => ({ ...r, name: names.get(r.userId) ?? '' })) });
+  sendSuccess(res, { config, rows: rows.map(r => ({ ...r, name: names.get(r.userId)?.name ?? '', nameKana: names.get(r.userId)?.nameKana ?? '' })) });
 }));
 
 export default router;

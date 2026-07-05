@@ -21,6 +21,14 @@ export async function grantPaidLeave(data: { auto?: boolean; userId?: string; da
   return res.data;
 }
 
+export async function updatePaidLeaveGrant(
+  id: string,
+  data: { grantedDays?: number; usedDays?: number; remainingDays?: number; expiryDate?: string },
+) {
+  const res = await apiClient.put<ApiResponse<PaidLeaveGrant>>(`/paid-leave/grant/${id}`, data);
+  return res.data;
+}
+
 export async function usePaidLeave(data: { userId?: string; usedDate: string; days: number; reason?: string | null }) {
   const res = await apiClient.post<ApiResponse<PaidLeaveUsage>>('/paid-leave/use', data);
   return res.data;

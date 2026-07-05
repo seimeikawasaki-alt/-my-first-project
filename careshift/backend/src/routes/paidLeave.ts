@@ -40,11 +40,13 @@ router.get('/summary', authenticate, authorize('ADMIN'), asyncHandler(async (_re
     return {
       userId: u.id,
       name: `${u.lastName} ${u.firstName}`,
+      nameKana: `${u.lastNameKana ?? ''} ${u.firstNameKana ?? ''}`.trim(),
       grantedDays: latest?.grantedDays ?? 0,
       usedDays: latest ? latest.usedDays : 0,
       remainingDays: remaining,
       compliance,
       expiryDate,
+      latestGrantId: latest?.id ?? null,
     };
   });
   sendSuccess(res, rows);
@@ -76,6 +78,34 @@ router.post('/grant', authenticate, authorize('ADMIN'), asyncHandler(async (req:
   }
   const grant = await grantManual(parsed.data.userId, parsed.data.days);
   sendSuccess(res, grant, 201);
+}));
+
+// PUT /api/v1/paid-leave/grant/:id — 付与内容の手動修正（管理者）
+router.put('/grant/:id', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const parsed = z.object({
+    grantedDays: z.number().min(0).optional(),
+    usedDays: z.number().min(0).optional(),
+    remainingDays: z.number().min(0).optional(),
+    expiryDate: z.string().optional(),
+  }).safeParse(req.body);
+  if (!parsed.success) { sendError(res, 400, 'VALIDATION_ERROR', '入力内容に誤りがあります'); return; }
+
+  const existing = await prisma.paidLeaveGrant.findUnique({ where: { id: req.params.id } });
+  if (!existing) { sendError(res, 404, 'NOT_FOUND', '付与記録が見つかりません'); return; }
+
+  const grantedDays = parsed.data.grantedDays ?? existing.grantedDays;
+  const usedDays = parsed.data.usedDays ?? existing.usedDays;
+  // remainingDays 未指定なら granted−used を採用
+  const remainingDays = parsed.data.remainingDays ?? Math.max(0, grantedDays - usedDays);
+
+  const updated = await prisma.paidLeaveGrant.update({
+    where: { id: req.params.id },
+    data: {
+      grantedDays, usedDays, remainingDays,
+      ...(parsed.data.expiryDate ? { expiryDate: new Date(parsed.data.expiryDate) } : {}),
+    },
+  });
+  sendSuccess(res, updated);
 }));
 
 // POST /api/v1/paid-leave/use — 有給取得申請

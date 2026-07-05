@@ -97,6 +97,15 @@ router.post('/punch-in', authenticate, async (req: Request, res: Response): Prom
     return;
   }
 
+  // シフトが入っていない日は打刻できない（公開済みシフトが必要）
+  const todayShift = await prisma.shift.findFirst({
+    where: { userId, shiftDate: workDate, status: 'PUBLISHED', shiftTypeId: { not: null } },
+  });
+  if (!todayShift) {
+    sendError(res, 400, 'NO_SHIFT_TODAY', '本日はシフトが登録されていないため打刻できません');
+    return;
+  }
+
   const now = new Date();
   const attendance = await prisma.attendance.create({
     data: {

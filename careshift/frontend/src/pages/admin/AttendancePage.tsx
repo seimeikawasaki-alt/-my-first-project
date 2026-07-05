@@ -273,7 +273,8 @@ export default function AttendancePage() {
             type="date"
             value={dateFilter}
             onChange={e => setDateFilter(e.target.value)}
-            className="input py-2 text-sub w-auto"
+            aria-label="日付で検索"
+            className="input py-3 px-4 text-base w-52 cursor-pointer [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:scale-150 [&::-webkit-calendar-picker-indicator]:ml-1"
           />
           {dateFilter && (
             <button onClick={() => setDateFilter('')} className="text-subtext hover:text-text text-sub px-1">日付クリア</button>

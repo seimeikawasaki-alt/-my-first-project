@@ -5,6 +5,7 @@ import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { generateShifts } from '../services/shiftGenerator.service.js';
 import { writeAudit, reqMeta } from '../utils/audit.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -63,7 +64,7 @@ router.get('/my', authenticate, async (req: Request, res: Response): Promise<voi
 });
 
 // POST /api/v1/shifts/publish — must be before /:id
-router.post('/publish', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.post('/publish', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const parsed = publishSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, 'VALIDATION_ERROR', '入力内容に誤りがあります',
@@ -99,7 +100,7 @@ router.post('/publish', authenticate, authorize('ADMIN'), async (req: Request, r
 
   void writeAudit({ userId: req.user!.id, action: 'SHIFT_PUBLISH', targetType: 'Shift', targetId: `${year}-${month}${groupId ? `/${groupId}` : ''}`, after: { publishedCount: result.count }, ...reqMeta(req) });
   sendSuccess(res, { publishedCount: result.count });
-});
+}));
 
 // POST /api/v1/shifts/bulk — must be before /:id
 router.post('/bulk', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
@@ -172,7 +173,7 @@ const autoGenerateSchema = z.object({
 });
 
 // POST /api/v1/shifts/auto-generate — must be before /:id
-router.post('/auto-generate', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.post('/auto-generate', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const parsed = autoGenerateSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, 'VALIDATION_ERROR', '入力内容に誤りがあります',
@@ -188,7 +189,7 @@ router.post('/auto-generate', authenticate, authorize('ADMIN'), async (req: Requ
 
   void writeAudit({ userId: req.user!.id, action: 'SHIFT_AUTO_GENERATE', targetType: 'Shift', targetId: `${parsed.data.year}-${parsed.data.month}${parsed.data.groupId ? `/${parsed.data.groupId}` : ''}`, after: { totalShifts: result.totalShifts, fulfilledRate: result.fulfilledRate }, ...reqMeta(req) });
   sendSuccess(res, result);
-});
+}));
 
 // GET /api/v1/shifts/generation-logs — must be before /:id
 router.get('/generation-logs', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {

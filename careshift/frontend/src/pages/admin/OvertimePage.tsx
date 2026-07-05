@@ -18,6 +18,8 @@ export default function OvertimePage() {
   const [rows, setRows] = useState<OvertimeStatusRow[]>([]);
   const [config, setConfig] = useState<OvertimeConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [sortMode, setSortMode] = useState<'kana' | 'alert'>('kana');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,14 +37,22 @@ export default function OvertimePage() {
   const prev = () => { if (month === 1) { setYear(y => y - 1); setMonth(12); } else setMonth(m => m - 1); };
   const next = () => { if (month === 12) { setYear(y => y + 1); setMonth(1); } else setMonth(m => m + 1); };
 
-  const sorted = [...rows].sort((a, b) => {
-    const rank = { EXCEEDED: 0, WARNING: 1, NORMAL: 2 } as const;
-    return rank[a.alertLevel] - rank[b.alertLevel] || b.monthlyOvertimeHours - a.monthlyOvertimeHours;
-  });
+  const sorted = rows
+    .filter(r => {
+      const q = search.trim();
+      if (!q) return true;
+      return `${r.name}${r.nameKana ?? ''}`.toLowerCase().includes(q.toLowerCase());
+    })
+    .slice()
+    .sort((a, b) => {
+      if (sortMode === 'kana') return (a.nameKana ?? a.name).localeCompare(b.nameKana ?? b.name, 'ja');
+      const rank = { EXCEEDED: 0, WARNING: 1, NORMAL: 2 } as const;
+      return rank[a.alertLevel] - rank[b.alertLevel] || b.monthlyOvertimeHours - a.monthlyOvertimeHours;
+    });
 
   const exportCsv = () => {
     const header = '氏名,今月残業(h),年度累計(h),状態';
-    const lines = rows.map(r => [r.name, r.monthlyOvertimeHours, r.yearlyTotalHours, ALERT_META[r.alertLevel].label.replace(/[✅🟡🔴 ]/g, '')].join(','));
+    const lines = sorted.map(r => [r.name, r.monthlyOvertimeHours, r.yearlyTotalHours, ALERT_META[r.alertLevel].label.replace(/[✅🟡🔴 ]/g, '')].join(','));
     const csv = '﻿' + [header, ...lines].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a'); a.href = url; a.download = `overtime_${year}_${month}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -65,9 +75,25 @@ export default function OvertimePage() {
         </p>
       )}
 
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="スタッフ名で検索（氏名・カナ）"
+          className="form-input w-full sm:w-80"
+        />
+        <div className="flex items-center gap-2 text-sub text-subtext">
+          <span>並び順</span>
+          <button onClick={() => setSortMode('kana')} className={sortMode === 'kana' ? 'btn-primary px-3 py-1' : 'btn-secondary px-3 py-1'}>あいうえお順</button>
+          <button onClick={() => setSortMode('alert')} className={sortMode === 'alert' ? 'btn-primary px-3 py-1' : 'btn-secondary px-3 py-1'}>警告優先</button>
+        </div>
+      </div>
+
       <div className="card p-0 overflow-hidden">
         {loading ? <div className="py-16"><LoadingSpinner /></div>
           : rows.length === 0 ? <EmptyState icon="⚠️" title="残業データがありません" />
+          : sorted.length === 0 ? <EmptyState icon="🔍" title="該当するスタッフがいません" description="検索条件を変更してください" />
           : (
             <div className="overflow-x-auto">
               <table className="w-full text-sub">
