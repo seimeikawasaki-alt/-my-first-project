@@ -33,6 +33,11 @@ export async function confirmPayroll(id: string) {
   return res.data;
 }
 
+export async function confirmAllPayrolls(data: { year: number; month: number }) {
+  const res = await apiClient.post<ApiResponse<{ confirmedCount: number }>>('/payroll/confirm-all', data);
+  return res.data;
+}
+
 export async function getMyPayrolls() {
   const res = await apiClient.get<ApiResponse<Payroll[]>>('/payroll/my');
   return res.data;

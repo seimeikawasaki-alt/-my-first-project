@@ -5,6 +5,7 @@ import { staffApi } from '../../api/staff';
 import { Group, User } from '../../types';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import Modal from '../../components/common/Modal';
+import { matchStaff, compareKana } from '../../utils/staffSort';
 import { AxiosError } from 'axios';
 
 const PRESET_COLORS = [
@@ -36,6 +37,7 @@ export default function GroupsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [addUserId, setAddUserId] = useState('');
   const [addIsLeader, setAddIsLeader] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
 
   const fetchGroups = async () => {
     setIsLoading(true);
@@ -104,6 +106,7 @@ export default function GroupsPage() {
     setSelectedGroup(group);
     setAddUserId('');
     setAddIsLeader(false);
+    setMemberSearch('');
     setIsMemberOpen(true);
   };
 
@@ -297,21 +300,35 @@ export default function GroupsPage() {
           {/* Add Member */}
           <div className="p-4 bg-gray-50 rounded-lg border border-border">
             <p className="text-sub font-medium mb-3">メンバーを追加</p>
+            <input
+              type="text"
+              value={memberSearch}
+              onChange={e => setMemberSearch(e.target.value)}
+              placeholder="スタッフ検索（氏名・フリガナ・ID）"
+              className="form-input mb-2"
+            />
             <div className="flex gap-2 flex-wrap">
-              <select
-                value={addUserId}
-                onChange={e => setAddUserId(e.target.value)}
-                className="form-input flex-1 min-w-48"
-              >
-                <option value="">スタッフを選択...</option>
-                {allStaff
-                  .filter(s => !getMemberIds(selectedGroup).includes(s.id))
-                  .map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.lastName} {s.firstName} ({s.userCode})
-                    </option>
-                  ))}
-              </select>
+              {(() => {
+                const candidates = allStaff
+                  .filter(s => s.role !== 'ADMIN' && !getMemberIds(selectedGroup).includes(s.id) && matchStaff(s, memberSearch))
+                  .slice()
+                  .sort(compareKana);
+                return (
+                  <select
+                    value={addUserId}
+                    onChange={e => setAddUserId(e.target.value)}
+                    className="form-input flex-1 min-w-48"
+                    size={memberSearch ? 5 : 1}
+                  >
+                    <option value="">スタッフを選択...（{candidates.length}名）</option>
+                    {candidates.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.lastName} {s.firstName} ({s.userCode})
+                      </option>
+                    ))}
+                  </select>
+                );
+              })()}
               <label className="flex items-center gap-1.5 text-sub cursor-pointer">
                 <input
                   type="checkbox"

@@ -4,7 +4,7 @@ import Modal from '../../components/common/Modal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { staffApi } from '../../api/staff';
 import {
-  getPayrolls, getPayroll, calculatePayroll, updatePayroll, confirmPayroll,
+  getPayrolls, getPayroll, calculatePayroll, updatePayroll, confirmPayroll, confirmAllPayrolls,
   payslipPdfUrl, payrollExportUrl,
 } from '../../api/payroll';
 import { toast } from '../../stores/toastStore';
@@ -32,6 +32,7 @@ export default function SalaryPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [bulkCalculating, setBulkCalculating] = useState(false);
+  const [bulkConfirming, setBulkConfirming] = useState(false);
   const [rowCalcId, setRowCalcId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
@@ -90,6 +91,25 @@ export default function SalaryPage() {
       toast.error('計算に失敗しました');
     } finally {
       setBulkCalculating(false);
+    }
+  };
+
+  const handleBulkConfirm = async () => {
+    const calculatedCount = payrolls.filter(p => p.status === 'CALCULATED').length;
+    if (calculatedCount === 0) {
+      toast.info('確定できる（計算済みの）給与がありません');
+      return;
+    }
+    if (!confirm(`計算済みの給与 ${calculatedCount} 件を一括で確定しますか？確定後は編集できません。`)) return;
+    setBulkConfirming(true);
+    try {
+      const res = await confirmAllPayrolls({ year, month });
+      toast.success(`${res.data.confirmedCount}件の給与を確定しました`);
+      load();
+    } catch {
+      toast.error('一括確定に失敗しました');
+    } finally {
+      setBulkConfirming(false);
     }
   };
 
@@ -205,6 +225,9 @@ export default function SalaryPage() {
           <button onClick={() => window.open(payrollExportUrl(year, month), '_blank')} className="btn-secondary">CSV出力</button>
           <button onClick={handleBulk} disabled={bulkCalculating} className="btn-primary">
             {bulkCalculating ? '計算中...' : '一括計算'}
+          </button>
+          <button onClick={handleBulkConfirm} disabled={bulkConfirming} className="btn-primary bg-success hover:bg-green-600">
+            {bulkConfirming ? '確定中...' : '一括確定'}
           </button>
         </div>
       </div>

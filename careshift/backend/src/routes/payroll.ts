@@ -61,6 +61,24 @@ router.post('/calculate', authenticate, authorize('ADMIN'), asyncHandler(async (
   });
 }));
 
+// POST /api/v1/payroll/confirm-all — confirm every CALCULATED payroll for a month
+router.post('/confirm-all', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const parsed = z.object({
+    year: z.number().int().min(2000).max(2100),
+    month: z.number().int().min(1).max(12),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 400, 'VALIDATION_ERROR', 'year と month は必須です');
+    return;
+  }
+  const { year, month } = parsed.data;
+  const result = await prisma.payroll.updateMany({
+    where: { year, month, status: 'CALCULATED' },
+    data: { status: 'CONFIRMED', confirmedAt: new Date(), confirmedBy: req.user!.id },
+  });
+  sendSuccess(res, { confirmedCount: result.count });
+}));
+
 // GET /api/v1/payroll/my — staff: own confirmed payslips (must be before /:id)
 router.get('/my', authenticate, asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const payrolls = await prisma.payroll.findMany({
