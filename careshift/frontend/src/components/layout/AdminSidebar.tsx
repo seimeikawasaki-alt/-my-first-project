@@ -18,6 +18,9 @@ const navItems = [
   { label: '残業管理', icon: '⚠️', to: '/admin/overtime' },
   { label: '給与管理', icon: '💴', to: `/admin/salary/${year}/${month}` },
   { label: '給与項目設定', icon: '🧾', to: '/admin/salary/settings' },
+  { label: '給与振込', icon: '🏦', to: '/admin/payroll-transfer' },
+  { label: '資格・研修管理', icon: '🎓', to: '/admin/qualifications' },
+  { label: '入退社管理', icon: '🚪', to: '/admin/lifecycle' },
   { label: '監査ログ', icon: '📋', to: '/admin/audit-logs' },
   { label: '設定', icon: '⚙️', to: '/admin/settings' },
 ];

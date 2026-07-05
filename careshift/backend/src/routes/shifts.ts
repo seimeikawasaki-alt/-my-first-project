@@ -6,6 +6,7 @@ import { sendSuccess, sendError } from '../utils/response.js';
 import { generateShifts } from '../services/shiftGenerator.service.js';
 import { writeAudit, reqMeta } from '../utils/audit.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { buildShiftPrintHtml } from '../services/shiftPrint.service.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -62,6 +63,20 @@ router.get('/my', authenticate, async (req: Request, res: Response): Promise<voi
 
   sendSuccess(res, shifts);
 });
+
+// GET /api/v1/shifts/print — 月間シフト表の印刷用HTML（A3横）。must be before /:id
+router.get('/print', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const year = parseInt(req.query.year as string);
+  const month = parseInt(req.query.month as string);
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    res.status(400).send('year と month を指定してください');
+    return;
+  }
+  const groupId = typeof req.query.groupId === 'string' && req.query.groupId ? req.query.groupId : undefined;
+  const html = await buildShiftPrintHtml({ year, month, groupId });
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+}));
 
 // POST /api/v1/shifts/publish — must be before /:id
 router.post('/publish', authenticate, authorize('ADMIN'), asyncHandler(async (req: Request, res: Response): Promise<void> => {

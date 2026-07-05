@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { getTodayDashboard, type TodayDashboard, type DashboardStaff } from '../../api/dashboard';
 import { getOvertimeAlerts } from '../../api/overtime';
+import { getExpiringQualifications } from '../../api/qualifications';
 import { Skeleton } from '../../components/common/Skeleton';
 import EmptyState from '../../components/common/EmptyState';
 
@@ -27,6 +28,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState<Panel>(null);
   const [overtimeAlertCount, setOvertimeAlertCount] = useState(0);
+  const [qualAlertCount, setQualAlertCount] = useState(0);
 
   const today = now.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
@@ -42,6 +44,11 @@ export default function DashboardPage() {
     try {
       const alerts = await getOvertimeAlerts({ year: now.getFullYear(), month: now.getMonth() + 1 });
       setOvertimeAlertCount(alerts.data.length);
+    } catch { /* ignore */ }
+    // 資格・研修の期限アラート（失敗しても致命的でない）
+    try {
+      const exp = await getExpiringQualifications();
+      setQualAlertCount(exp.data.length);
     } catch { /* ignore */ }
   }, []);
 
@@ -90,6 +97,15 @@ export default function DashboardPage() {
           <span className="text-lg">⚠️</span>
           <span className="flex-1 text-sub text-amber-800 font-medium">残業時間が上限に近いスタッフが{overtimeAlertCount}名います</span>
           <span className="text-amber-700">›</span>
+        </button>
+      )}
+
+      {/* Qualification expiry alert banner */}
+      {qualAlertCount > 0 && (
+        <button onClick={() => navigate('/admin/qualifications')} className="w-full flex items-center gap-2 bg-red-50 border border-red-300 rounded-xl px-4 py-3 mb-4 text-left hover:bg-red-100 transition-colors">
+          <span className="text-lg">🎓</span>
+          <span className="flex-1 text-sub text-red-800 font-medium">有効期限が切れた/間近の資格・研修が{qualAlertCount}件あります</span>
+          <span className="text-red-700">›</span>
         </button>
       )}
 

@@ -23,6 +23,9 @@ import PaidLeavePage from './pages/admin/PaidLeavePage';
 import OvertimePage from './pages/admin/OvertimePage';
 import ShiftSwapPage from './pages/admin/ShiftSwapPage';
 import AuditLogsPage from './pages/admin/AuditLogsPage';
+import QualificationsPage from './pages/admin/QualificationsPage';
+import PayrollTransferPage from './pages/admin/PayrollTransferPage';
+import LifecyclePage from './pages/admin/LifecyclePage';
 import StaffDashboardPage from './pages/staff/StaffDashboardPage';
 import PunchPage from './pages/staff/PunchPage';
 import MyShiftsPage from './pages/staff/MyShiftsPage';
@@ -108,6 +111,9 @@ export default function App() {
           <Route path="overtime" element={<OvertimePage />} />
           <Route path="shift-swap" element={<ShiftSwapPage />} />
           <Route path="audit-logs" element={<AuditLogsPage />} />
+          <Route path="qualifications" element={<QualificationsPage />} />
+          <Route path="payroll-transfer" element={<PayrollTransferPage />} />
+          <Route path="lifecycle" element={<LifecyclePage />} />
         </Route>
 
         {/* Staff routes with bottom nav layout */}

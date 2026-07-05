@@ -25,6 +25,8 @@ model User {
   isActive         Boolean   @default(true)
   failedLoginCount Int       @default(0)
   lockedUntil      DateTime?
+  retiredAt        DateTime? // 退職日（論理削除。労基法の記録保存義務のため物理削除しない）
+  dataRetentionUntil DateTime? // データ保存期限（退職日 + 5年）
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -338,4 +340,95 @@ model AuditLog {
   @@index([userId])
   @@index([action])
   @@index([createdAt])
+}
+
+// ---- Phase 6: 資格・研修管理 / 給与振込 / 入退社ワークフロー ----
+
+// 資格・研修マスタ
+model Qualification {
+  id          String   @id @default(uuid())
+  name        String
+  category    String   @default("QUALIFICATION") // QUALIFICATION(資格) / TRAINING(研修)
+  hasExpiry   Boolean  @default(true)
+  validMonths Int? // 有効期間（月）。取得日から自動計算する場合に使用
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+// スタッフ個別の資格・研修取得記録
+model StaffQualification {
+  id              String    @id @default(uuid())
+  userId          String
+  qualificationId String
+  acquiredDate    DateTime
+  expiryDate      DateTime? // 有効期限（なしの資格は null）
+  certificateNo   String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([qualificationId])
+  @@index([expiryDate])
+}
+
+// スタッフの振込先口座（全銀協フォーマット生成に使用）
+model StaffBankAccount {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  bankCode      String // 銀行コード（4桁）
+  bankName      String // 銀行名（半角カナ）
+  branchCode    String // 支店コード（3桁）
+  branchName    String // 支店名（半角カナ）
+  accountType   String   @default("ORDINARY") // ORDINARY(普通=1) / CHECKING(当座=2)
+  accountNumber String // 口座番号（7桁）
+  accountHolder String // 口座名義（半角カナ）
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// 給与振込バッチ（全銀協フォーマット生成履歴）
+model PayrollTransferBatch {
+  id           String   @id @default(uuid())
+  year         Int
+  month        Int
+  transferDate DateTime // 振込指定日
+  totalCount   Int      @default(0) // 明細件数
+  totalAmount  Decimal  @default(0) // 合計金額
+  status       String   @default("GENERATED") // GENERATED / EXPORTED
+  fileName     String?
+  content      String? // 生成済み全銀協テキスト（再ダウンロード用）
+  missingCount Int      @default(0) // 口座未登録により除外した人数
+  createdBy    String
+  createdAt    DateTime @default(now())
+
+  @@index([year, month])
+}
+
+// 入退社ライフサイクルイベント
+model StaffLifecycleEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  eventType String // ONBOARDING(入社) / OFFBOARDING(退職)
+  eventDate DateTime
+  notes     String?
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+}
+
+// 退職手続きチェックリスト
+model OffboardingChecklist {
+  id        String    @id @default(uuid())
+  userId    String
+  itemKey   String // RETURN_UNIFORM / RETURN_KEY / RETURN_ID_CARD / INSURANCE / SETTLE_PAYROLL ...
+  label     String
+  isDone    Boolean   @default(false)
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }

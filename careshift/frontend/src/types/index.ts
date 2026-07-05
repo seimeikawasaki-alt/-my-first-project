@@ -393,6 +393,119 @@ export interface ShiftSwapRequest {
   alreadyResponded?: boolean;
 }
 
+// ---- Phase 6: 資格・研修 / 給与振込 / 入退社 ----------------------------
+
+export type QualificationCategory = 'QUALIFICATION' | 'TRAINING';
+export type ExpiryStatus = 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' | 'NO_EXPIRY';
+
+export interface Qualification {
+  id: string;
+  name: string;
+  category: QualificationCategory;
+  hasExpiry: boolean;
+  validMonths?: number | null;
+  description?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export interface StaffQualificationRow {
+  id: string;
+  userId: string;
+  userName: string;
+  userNameKana: string;
+  qualificationId: string;
+  qualificationName: string;
+  category: string;
+  acquiredDate: string;
+  expiryDate: string | null;
+  certificateNo: string | null;
+  notes: string | null;
+  expiryStatus: ExpiryStatus;
+  daysUntilExpiry: number | null;
+}
+
+export type BankAccountType = 'ORDINARY' | 'CHECKING';
+export interface StaffBankAccount {
+  id: string;
+  userId: string;
+  bankCode: string;
+  bankName: string;
+  branchCode: string;
+  branchName: string;
+  accountType: BankAccountType;
+  accountNumber: string;
+  accountHolder: string;
+}
+
+export interface BankAccountRow {
+  userId: string;
+  name: string;
+  nameKana: string;
+  account: StaffBankAccount | null;
+}
+
+export interface TransferPreviewRow {
+  userId: string;
+  name: string;
+  amount: number;
+  hasAccount: boolean;
+  bankName?: string;
+  branchName?: string;
+  accountNumber?: string;
+}
+export interface TransferPreview {
+  rows: TransferPreviewRow[];
+  missing: TransferPreviewRow[];
+  totalCount: number;
+  totalAmount: number;
+}
+
+export interface TransferBatch {
+  id: string;
+  year: number;
+  month: number;
+  transferDate: string;
+  totalCount: number;
+  totalAmount: string | number;
+  status: string;
+  fileName: string | null;
+  missingCount: number;
+  createdAt: string;
+}
+
+export interface LifecycleEvent {
+  id: string;
+  userId: string;
+  eventType: 'ONBOARDING' | 'OFFBOARDING';
+  eventDate: string;
+  notes?: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface OffboardingChecklistItem {
+  id: string;
+  userId: string;
+  itemKey: string;
+  label: string;
+  isDone: boolean;
+  doneAt?: string | null;
+}
+
+export interface RetiredStaffRow {
+  userId: string;
+  userCode: string;
+  name: string;
+  nameKana: string;
+  employmentType: string;
+  hireDate: string | null;
+  retiredAt: string | null;
+  dataRetentionUntil: string | null;
+  checklistTotal: number;
+  checklistDone: number;
+}
+
 export interface AuditLog {
   id: string;
   userId: string;

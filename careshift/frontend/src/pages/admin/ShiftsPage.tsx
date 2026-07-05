@@ -128,6 +128,13 @@ export default function ShiftsPage() {
     }
   };
 
+  const openPrint = (groupId: string) => {
+    const base = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+    const params = new URLSearchParams({ year: String(year), month: String(month) });
+    if (groupId) params.set('groupId', groupId);
+    window.open(`${base}/shifts/print?${params.toString()}`, '_blank');
+  };
+
   const handlePublish = async () => {
     if (!confirm('このページのシフトを公開しますか？（AUTO状態のシフトも含まれます）')) return;
     setPublishing(true);
@@ -249,6 +256,8 @@ export default function ShiftsPage() {
           <button onClick={handleCopy} disabled={copying} className="btn-secondary">
             {copying ? 'コピー中...' : '前月からコピー'}
           </button>
+          <button onClick={() => openPrint(selectedGroup)} disabled={!selectedGroup} className="btn-secondary">🖨 グループ印刷</button>
+          <button onClick={() => openPrint('')} className="btn-secondary">🖨 全体印刷</button>
           <button onClick={handlePublish} disabled={publishing} className="btn-primary">
             {publishing ? '公開中...' : 'シフトを公開'}
           </button>

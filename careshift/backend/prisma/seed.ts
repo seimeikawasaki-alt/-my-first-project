@@ -328,6 +328,31 @@ async function main() {
     console.log('Overtime config skipped (run migration first)');
   }
 
+  // 資格・研修マスタのデフォルト（Phase 6）
+  try {
+    const qp = prisma as unknown as {
+      qualification: { findFirst: () => Promise<unknown>; createMany: (a: object) => Promise<unknown> };
+    };
+    const existing = await qp.qualification.findFirst();
+    if (!existing) {
+      await qp.qualification.createMany({
+        data: [
+          { name: '介護福祉士', category: 'QUALIFICATION', hasExpiry: false, validMonths: null },
+          { name: '初任者研修', category: 'QUALIFICATION', hasExpiry: false, validMonths: null },
+          { name: '実務者研修', category: 'QUALIFICATION', hasExpiry: false, validMonths: null },
+          { name: '普通自動車運転免許', category: 'QUALIFICATION', hasExpiry: true, validMonths: null },
+          { name: '認知症介護基礎研修', category: 'TRAINING', hasExpiry: false, validMonths: null },
+          { name: '感染症対策研修', category: 'TRAINING', hasExpiry: true, validMonths: 12 },
+          { name: '虐待防止研修', category: 'TRAINING', hasExpiry: true, validMonths: 12 },
+          { name: '身体拘束適正化研修', category: 'TRAINING', hasExpiry: true, validMonths: 12 },
+        ],
+      });
+      console.log('Qualification masters created (8 defaults)');
+    }
+  } catch {
+    console.log('Qualification masters skipped (run migration first)');
+  }
+
   console.log('Seed completed successfully!');
 }
 
