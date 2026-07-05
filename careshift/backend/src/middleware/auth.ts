@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { JwtPayload, UserRole, AuthUser } from '../types/index.js';
 import { sendError } from '../utils/response.js';
+import { writeAudit, auditFromReq } from '../utils/audit.js';
 
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
   const token = req.cookies?.token as string | undefined;
@@ -34,6 +35,12 @@ export function authorize(...roles: UserRole[]) {
       return;
     }
     if (!roles.includes(req.user.role)) {
+      void writeAudit(auditFromReq(req, {
+        userId: req.user.id,
+        action: 'PERMISSION_DENIED',
+        targetType: 'Route',
+        targetId: `${req.method} ${req.originalUrl}`,
+      }));
       sendError(res, 403, 'FORBIDDEN', 'このリソースへのアクセス権限がありません');
       return;
     }

@@ -315,6 +315,19 @@ async function main() {
   }
   console.log('Shift requirements created (global defaults + night-group override)');
 
+  // 36協定 残業上限のデフォルト設定（Phase 5）
+  try {
+    const existing = await (prisma as unknown as { overtimeLimitConfig: { findFirst: () => Promise<unknown> } }).overtimeLimitConfig.findFirst();
+    if (!existing) {
+      await (prisma as unknown as { overtimeLimitConfig: { create: (a: object) => Promise<unknown> } }).overtimeLimitConfig.create({
+        data: { monthlyLimitHours: 45, yearlyLimitHours: 360, specialMonthlyLimit: 100, specialYearlyLimit: 720, warningThresholdRate: 0.8 },
+      });
+      console.log('Overtime limit config created');
+    }
+  } catch {
+    console.log('Overtime config skipped (run migration first)');
+  }
+
   console.log('Seed completed successfully!');
 }
 

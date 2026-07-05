@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { overloadedUserIds } from './overtime.service.js';
 
 const prisma = new PrismaClient();
 
@@ -108,6 +109,9 @@ export async function generateShifts(params: {
 
   // How many calendar days to block after a night shift (MIN_REST_AFTER_NIGHT)
   const nightRestBlockDays = Math.max(1, Math.ceil(minRestAfterNight / 24));
+
+  // 36協定: 残業が警告/超過レベルのスタッフには夜勤を優先的に割り当てない
+  const overloadedSet = await overloadedUserIds(year, month);
 
   // Determine target groups: a single group, or every group (Plan A: per-group generation)
   const targetGroupIds = groupId
@@ -337,6 +341,13 @@ export async function generateShifts(params: {
           const bUnder = b.minWorkDaysPerMonth != null && b.workDays < b.minWorkDaysPerMonth ? 0 : 1;
           if (aUnder !== bUnder) return aUnder - bUnder;
 
+          // 36協定配慮: 残業が上限に近いスタッフは夜勤を後回し
+          if (isNight) {
+            const aOver = overloadedSet.has(a.id) ? 1 : 0;
+            const bOver = overloadedSet.has(b.id) ? 1 : 0;
+            if (aOver !== bOver) return aOver - bOver;
+          }
+
           if (enableFairDistribution) {
             if (isNight && (fairTarget === 'ALL' || fairTarget === 'NIGHT')) return a.nightShifts - b.nightShifts;
             if (isEarly && (fairTarget === 'ALL' || fairTarget === 'EARLY')) return a.earlyShiftCount - b.earlyShiftCount;
@@ -423,6 +434,17 @@ export async function generateShifts(params: {
         }
       }
     }
+  }
+
+  // 36協定: 残業上限に近いスタッフへの配慮を警告として表示
+  if (overloadedSet.size > 0) {
+    warnings.push({
+      type: 'NIGHT_LIMIT',
+      date: '',
+      shiftTypeName: '残業配慮',
+      message: `残業上限に近いスタッフ${overloadedSet.size}名には夜勤の割り当てを抑制しました`,
+      severity: 'LOW',
+    });
   }
 
   const seenWarnings = new Set<string>();

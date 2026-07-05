@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { generateShifts } from '../services/shiftGenerator.service.js';
+import { writeAudit, reqMeta } from '../utils/audit.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -96,6 +97,7 @@ router.post('/publish', authenticate, authorize('ADMIN'), async (req: Request, r
     data: { status: 'PUBLISHED' },
   });
 
+  void writeAudit({ userId: req.user!.id, action: 'SHIFT_PUBLISH', targetType: 'Shift', targetId: `${year}-${month}${groupId ? `/${groupId}` : ''}`, after: { publishedCount: result.count }, ...reqMeta(req) });
   sendSuccess(res, { publishedCount: result.count });
 });
 
@@ -184,6 +186,7 @@ router.post('/auto-generate', authenticate, authorize('ADMIN'), async (req: Requ
     adminUserId: req.user!.id,
   });
 
+  void writeAudit({ userId: req.user!.id, action: 'SHIFT_AUTO_GENERATE', targetType: 'Shift', targetId: `${parsed.data.year}-${parsed.data.month}${parsed.data.groupId ? `/${parsed.data.groupId}` : ''}`, after: { totalShifts: result.totalShifts, fulfilledRate: result.fulfilledRate }, ...reqMeta(req) });
   sendSuccess(res, result);
 });
 

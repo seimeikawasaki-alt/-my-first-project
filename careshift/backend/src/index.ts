@@ -18,6 +18,10 @@ import staffShiftStatsRouter from './routes/staffShiftStats.js';
 import salaryRouter from './routes/salary.js';
 import payrollRouter from './routes/payroll.js';
 import dashboardRouter from './routes/dashboard.js';
+import paidLeaveRouter from './routes/paidLeave.js';
+import overtimeRouter from './routes/overtime.js';
+import shiftSwapRouter from './routes/shiftSwap.js';
+import auditLogsRouter from './routes/auditLogs.js';
 import { authLimiter, generalLimiter } from './middleware/rateLimit.js';
 
 const app = express();
@@ -49,6 +53,10 @@ app.use('/api/v1/staff-shift-stats', staffShiftStatsRouter);
 app.use('/api/v1/salary', salaryRouter);
 app.use('/api/v1/payroll', payrollRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
+app.use('/api/v1/paid-leave', paidLeaveRouter);
+app.use('/api/v1/overtime', overtimeRouter);
+app.use('/api/v1/shift-swap', shiftSwapRouter);
+app.use('/api/v1/audit-logs', auditLogsRouter);
 
 const APP_VERSION = '1.0.0';
 const healthPayload = () => ({ status: 'ok', version: APP_VERSION, timestamp: new Date().toISOString() });

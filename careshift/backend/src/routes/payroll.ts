@@ -7,6 +7,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { pdfLimiter } from '../middleware/rateLimit.js';
 import { executePayroll } from '../services/payroll.service.js';
 import { renderPayslipHtml } from '../utils/payslipHtml.js';
+import { writeAudit, reqMeta } from '../utils/audit.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -55,6 +56,7 @@ router.post('/calculate', authenticate, authorize('ADMIN'), asyncHandler(async (
   }
   const { year, month, userIds } = parsed.data;
   const result = await executePayroll(year, month, userIds);
+  void writeAudit({ userId: req.user!.id, action: 'PAYROLL_CALCULATE', targetType: 'Payroll', targetId: `${year}-${month}`, after: { calculatedCount: result.processed.length }, ...reqMeta(req) });
   sendSuccess(res, {
     calculatedCount: result.processed.length,
     skippedLockedCount: result.skippedLocked.length,
@@ -76,6 +78,7 @@ router.post('/confirm-all', authenticate, authorize('ADMIN'), asyncHandler(async
     where: { year, month, status: 'CALCULATED' },
     data: { status: 'CONFIRMED', confirmedAt: new Date(), confirmedBy: req.user!.id },
   });
+  void writeAudit({ userId: req.user!.id, action: 'PAYROLL_CONFIRM', targetType: 'Payroll', targetId: `${year}-${month}/all`, after: { confirmedCount: result.count }, ...reqMeta(req) });
   sendSuccess(res, { confirmedCount: result.count });
 }));
 
@@ -252,6 +255,7 @@ router.post('/:id/confirm', authenticate, authorize('ADMIN'), asyncHandler(async
     where: { id: payroll.id },
     data: { status: 'CONFIRMED', confirmedAt: new Date(), confirmedBy: req.user!.id },
   });
+  void writeAudit({ userId: req.user!.id, action: 'PAYROLL_CONFIRM', targetType: 'Payroll', targetId: payroll.id, after: { userId: payroll.userId, year: payroll.year, month: payroll.month }, ...reqMeta(req) });
   sendSuccess(res, { ...updated, netPay: Number(updated.netPay) });
 }));
 

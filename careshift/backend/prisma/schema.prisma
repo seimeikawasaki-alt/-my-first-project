@@ -237,3 +237,105 @@ model StaffShiftStats {
 
   @@unique([userId, year, month])
 }
+
+// ---- Phase 5: 有給休暇 / 36協定 / シフト交代 / 監査ログ ----
+
+model PaidLeaveGrant {
+  id            String   @id @default(uuid())
+  userId        String
+  grantDate     DateTime
+  grantedDays   Float
+  expiryDate    DateTime
+  usedDays      Float    @default(0)
+  remainingDays Float
+  fiscalYear    Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, fiscalYear])
+}
+
+model PaidLeaveUsage {
+  id           String   @id @default(uuid())
+  userId       String
+  grantId      String
+  usedDate     DateTime
+  days         Float    @default(1.0)
+  status       String   @default("PENDING") // PENDING / APPROVED / REJECTED
+  reason       String?
+  attendanceId String?
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+model OvertimeLimitConfig {
+  id                   String   @id @default(uuid())
+  monthlyLimitHours    Int      @default(45)
+  yearlyLimitHours     Int      @default(360)
+  specialMonthlyLimit  Int      @default(100)
+  specialYearlyLimit   Int      @default(720)
+  warningThresholdRate Float    @default(0.8)
+  updatedAt            DateTime @updatedAt
+}
+
+model OvertimeMonthlyStats {
+  id            String   @id @default(uuid())
+  userId        String
+  year          Int
+  month         Int
+  overtimeHours Float    @default(0)
+  yearlyTotal   Float    @default(0)
+  alertLevel    String   @default("NORMAL")
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, year, month])
+}
+
+model ShiftSwapRequest {
+  id                String    @id @default(uuid())
+  originalUserId    String
+  shiftId           String
+  reason            String
+  urgency           String    @default("URGENT")
+  status            String    @default("OPEN")
+  replacementUserId String?
+  notifiedUserIds   String?
+  approvedBy        String?
+  approvedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([status])
+  @@index([originalUserId])
+}
+
+model ShiftSwapResponse {
+  id            String   @id @default(uuid())
+  swapRequestId String
+  userId        String
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now())
+
+  @@index([swapRequestId])
+  @@index([userId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String
+  action      String
+  targetType  String?
+  targetId    String?
+  beforeValue String?
+  afterValue  String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}

@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { JwtPayload, UserRole } from '../types/index.js';
+import { writeAudit, reqMeta } from '../utils/audit.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -59,6 +60,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
   const passwordMatch = await bcrypt.compare(password, user.passwordHash);
   if (!passwordMatch) {
+    void writeAudit({ userId: user.id, action: 'LOGIN_FAILED', targetType: 'User', targetId: user.id, ...reqMeta(req) });
     const newFailCount = user.failedLoginCount + 1;
     const shouldLock = newFailCount >= LOCK_THRESHOLD;
     await prisma.user.update({
@@ -100,6 +102,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     maxAge: 8 * 60 * 60 * 1000,
   });
 
+  void writeAudit({ userId: user.id, action: 'LOGIN_SUCCESS', targetType: 'User', targetId: user.id, ...reqMeta(req) });
+
   sendSuccess(res, {
     id: user.id,
     userCode: user.userCode,
@@ -111,7 +115,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 });
 
 // POST /api/v1/auth/logout
-router.post('/logout', authenticate, (_req: Request, res: Response): void => {
+router.post('/logout', authenticate, (req: Request, res: Response): void => {
+  void writeAudit({ userId: req.user!.id, action: 'LOGOUT', ...reqMeta(req) });
   res.clearCookie('token');
   sendSuccess(res, { message: 'ログアウトしました' });
 });

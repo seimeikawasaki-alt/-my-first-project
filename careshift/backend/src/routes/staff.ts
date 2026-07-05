@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
+import { writeAudit, reqMeta } from '../utils/audit.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -219,6 +220,7 @@ router.post('/', authenticate, authorize('ADMIN'), async (req: Request, res: Res
     });
   }
 
+  void writeAudit({ userId: req.user!.id, action: 'STAFF_CREATE', targetType: 'User', targetId: user.id, after: { userCode: user.userCode, role: user.role }, ...reqMeta(req) });
   sendSuccess(res, user, 201);
 });
 
@@ -288,6 +290,16 @@ router.put('/:id', authenticate, authorize('ADMIN'), async (req: Request, res: R
     }
   }
 
+  const deactivated = existing.isActive && rest.isActive === false;
+  void writeAudit({
+    userId: req.user!.id,
+    action: deactivated ? 'STAFF_DEACTIVATE' : 'STAFF_UPDATE',
+    targetType: 'User',
+    targetId: user.id,
+    before: { isActive: existing.isActive, role: existing.role, employmentType: existing.employmentType },
+    after: { isActive: user.isActive, role: user.role },
+    ...reqMeta(req),
+  });
   sendSuccess(res, user);
 });
 
@@ -304,6 +316,7 @@ router.delete('/:id', authenticate, authorize('ADMIN'), async (req: Request, res
     data: { isActive: false },
   });
 
+  void writeAudit({ userId: req.user!.id, action: 'STAFF_DEACTIVATE', targetType: 'User', targetId: req.params.id, before: { isActive: true }, after: { isActive: false }, ...reqMeta(req) });
   sendSuccess(res, { message: 'スタッフを無効化しました' });
 });
 

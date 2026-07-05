@@ -5,6 +5,7 @@ import { authenticate, authorize } from '../middleware/auth.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { calcLateNightMinutes, calcWorkMinutes, shiftBaseMinutes, rollOvernight } from '../utils/workTime.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { writeAudit, reqMeta } from '../utils/audit.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -502,6 +503,15 @@ router.put('/:id', authenticate, authorize('ADMIN'), asyncHandler(async (req: Re
     },
   });
 
+  void writeAudit({
+    userId: req.user!.id,
+    action: 'ATTENDANCE_MODIFY',
+    targetType: 'Attendance',
+    targetId: updated.id,
+    before: { punchIn: existing.punchIn, punchOut: existing.punchOut, status: existing.status, workMinutes: existing.workMinutes },
+    after: { punchIn: updated.punchIn, punchOut: updated.punchOut, status: updated.status, workMinutes: updated.workMinutes, reason: modifyReason },
+    ...reqMeta(req),
+  });
   sendSuccess(res, updated);
 }));
 
