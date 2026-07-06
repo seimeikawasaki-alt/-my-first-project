@@ -29,7 +29,8 @@ router.get('/summary', authenticate, authorize('ADMIN'), asyncHandler(async (_re
     const userGrants = grants.filter(g => g.userId === u.id).sort((a, b) => b.grantDate.getTime() - a.grantDate.getTime());
     const remaining = userGrants.filter(g => g.expiryDate >= now).reduce((s, g) => s + g.remainingDays, 0);
     const latest = userGrants[0] ?? null;
-    let compliance = { required: false, usedDays: 0, remainingRequired: 0, daysUntilDeadline: 0, riskLevel: 'SAFE' as const };
+    let compliance: ReturnType<typeof checkFiveDaysCompliance> =
+      { required: false, usedDays: 0, remainingRequired: 0, daysUntilDeadline: 0, riskLevel: 'SAFE' };
     let expiryDate: string | null = null;
     if (latest) {
       const deadline = new Date(latest.grantDate); deadline.setUTCFullYear(deadline.getUTCFullYear() + 1);

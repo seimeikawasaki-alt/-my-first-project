@@ -91,9 +91,11 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     role: user.role as UserRole,
   };
 
-  const token = jwt.sign(payload, process.env.JWT_SECRET!, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '8h',
-  });
+  const signOptions: jwt.SignOptions = {
+    // 環境変数由来の文字列（例: '8h'）。@types/jsonwebtoken の StringValue 型へ明示キャスト
+    expiresIn: (process.env.JWT_EXPIRES_IN || '8h') as jwt.SignOptions['expiresIn'],
+  };
+  const token = jwt.sign(payload, process.env.JWT_SECRET as jwt.Secret, signOptions);
 
   res.cookie('token', token, {
     httpOnly: true,
