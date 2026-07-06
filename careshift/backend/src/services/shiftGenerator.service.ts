@@ -1,7 +1,16 @@
 import { PrismaClient } from '@prisma/client';
 import { overloadedUserIds } from './overtime.service.js';
+import { dateKey, addUTCDays, consecutiveEndingAt, projectNightRest } from './shiftRules.calc.js';
 
 const prisma = new PrismaClient();
+
+/** グループ別シフト設定（GroupShiftConfig）のうち生成で参照するフィールド。 */
+interface GroupShiftConfigData {
+  maxConsecutive: number | null;
+  maxNightPerMonth: number | null;
+  enableFairDistribution: boolean;
+  fairDistributionTarget: string;
+}
 
 export interface GenerationResult {
   success: boolean;
@@ -54,17 +63,9 @@ interface StaffState {
 
 type RequirementRow = { shiftTypeId: string; dayOfWeek: number | null; requiredStaff: number; groupId: string | null };
 
-function dateKey(date: Date): string {
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
-}
-
-function addUTCDays(date: Date, n: number): Date {
-  return new Date(date.getTime() + n * 86400000);
-}
-
 /** Detect night shift: prefer isNightShift field, fall back to isOvernight */
 function isNightShiftType(st: { isOvernight: boolean; isNightShift?: boolean }): boolean {
-  const ns = (st as { isNightShift?: boolean }).isNightShift;
+  const ns = st.isNightShift;
   return ns != null ? ns : st.isOvernight;
 }
 
@@ -199,6 +200,32 @@ export async function generateShifts(params: {
     existingBySlot.get(slot)!.add(s.userId);
   }
 
+  // ---- 前月末の状況を取得（月またぎの継続判定用）----
+  // 夜勤翌日ルール・連続夜勤・連続勤務日数は、前月末のシフトを引き継がないと
+  // 月初でリセットされてしまう。前月分の確定/自動シフトを読み込んでおく。
+  const prevMonthStart = new Date(Date.UTC(year, month - 2, 1));
+  const prevLastDay = addUTCDays(monthStart, -1); // 前月末日
+  const prevLastKey = dateKey(prevLastDay);
+  const prevShifts = await prisma.shift.findMany({
+    where: {
+      userId: { in: allStaffIds },
+      shiftDate: { gte: prevMonthStart, lt: monthStart },
+      status: { in: ['PUBLISHED', 'AUTO'] },
+    },
+    select: { userId: true, shiftDate: true, shiftTypeId: true },
+  });
+  const prevWorkedByUser = new Map<string, Set<string>>(); // userId → 勤務した日キー
+  const prevNightByUser = new Map<string, Set<string>>();  // userId → 夜勤だった日キー
+  for (const s of prevShifts) {
+    const dk = dateKey(s.shiftDate);
+    if (!prevWorkedByUser.has(s.userId)) prevWorkedByUser.set(s.userId, new Set());
+    prevWorkedByUser.get(s.userId)!.add(dk);
+    if (s.shiftTypeId && nightShiftIds.has(s.shiftTypeId)) {
+      if (!prevNightByUser.has(s.userId)) prevNightByUser.set(s.userId, new Set());
+      prevNightByUser.get(s.userId)!.add(dk);
+    }
+  }
+
   const warnings: Warning[] = [];
   const unfilledSlots: UnfilledSlot[] = [];
   const generatedShifts: Array<{ userId: string; shiftTypeId: string; shiftDate: Date; status: string; createdBy: string }> = [];
@@ -211,17 +238,17 @@ export async function generateShifts(params: {
   // ---- Generate per group ----
   for (const gid of targetGroupIds) {
     // Group config (non-fatal if table missing)
-    let groupConfig: {
-      maxConsecutive: number | null;
-      maxNightPerMonth: number | null;
-      enableFairDistribution: boolean;
-      fairDistributionTarget: string;
-    } | null = null;
+    let groupConfig: GroupShiftConfigData | null = null;
     try {
-      const gc = await (prisma as unknown as {
-        groupShiftConfig: { findUnique: (args: object) => Promise<unknown> };
-      }).groupShiftConfig.findUnique({ where: { groupId: gid } });
-      if (gc) groupConfig = gc as typeof groupConfig;
+      const gc = await prisma.groupShiftConfig.findUnique({ where: { groupId: gid } });
+      if (gc) {
+        groupConfig = {
+          maxConsecutive: gc.maxConsecutive,
+          maxNightPerMonth: gc.maxNightPerMonth,
+          enableFairDistribution: gc.enableFairDistribution,
+          fairDistributionTarget: gc.fairDistributionTarget,
+        };
+      }
     } catch { /* table may not exist yet */ }
 
     const maxConsecutive = groupConfig?.maxConsecutive ?? globalMaxConsecutive;
@@ -256,7 +283,7 @@ export async function generateShifts(params: {
         unavailableDates: string | null;
       } | undefined;
       const unavailableArr: string[] = c?.unavailableDates ? JSON.parse(c.unavailableDates) : [];
-      return {
+      const state: StaffState = {
         id,
         maxWorkDaysPerMonth: c?.maxWorkDaysPerMonth ?? null,
         minWorkDaysPerMonth: minWorkDaysPerMonth > 0 ? minWorkDaysPerMonth : null,
@@ -278,6 +305,24 @@ export async function generateShifts(params: {
         lastNightDate: null,
         assignedDates: new Set(),
       };
+
+      // ---- 前月末からの継続（月またぎ）を初期状態に反映 ----
+      const prevWorked = prevWorkedByUser.get(id);
+      if (prevWorked) {
+        const cw = consecutiveEndingAt(prevWorked, prevLastDay);
+        if (cw > 0) { state.consecutiveWorkDays = cw; state.lastWorkDate = prevLastKey; }
+      }
+      const prevNights = prevNightByUser.get(id);
+      if (prevNights && prevNights.size > 0) {
+        // 連続夜勤回数を引き継ぐ（前月末が夜勤で終わっている場合）
+        const cn = consecutiveEndingAt(prevNights, prevLastDay);
+        if (cn > 0) { state.consecutiveNights = cn; state.lastNightDate = prevLastKey; }
+        // 夜勤後の休息ブロックを当月へ投影（前月末夜勤 → 当月1日は夜勤か休みのみ）
+        const proj = projectNightRest(prevNights, monthStart, monthEnd, nightRestBlockDays);
+        proj.nightOnly.forEach(k => state.nightRestOnlyDates.add(k));
+        proj.blocked.forEach(k => state.unavailableDateSet.add(k));
+      }
+      return state;
     });
     allStaffStates.push(...staffStates);
 
@@ -468,9 +513,7 @@ export async function generateShifts(params: {
   try {
     for (const staff of allStaffStates) {
       if (staff.workDays === 0) continue;
-      await (prisma as unknown as {
-        staffShiftStats: { upsert: (args: object) => Promise<unknown> };
-      }).staffShiftStats.upsert({
+      await prisma.staffShiftStats.upsert({
         where: { userId_year_month: { userId: staff.id, year, month } },
         update: { nightCount: staff.nightShifts, earlyCount: staff.earlyShiftCount, totalWorkDays: staff.workDays },
         create: { userId: staff.id, year, month, nightCount: staff.nightShifts, earlyCount: staff.earlyShiftCount, totalWorkDays: staff.workDays },

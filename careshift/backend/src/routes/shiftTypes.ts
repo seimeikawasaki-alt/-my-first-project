@@ -14,6 +14,9 @@ const shiftTypeSchema = z.object({
   breakMinutes: z.number().int().min(0).default(60),
   color: z.string().optional(),
   isOvernight: z.boolean().default(false),
+  // 夜勤として扱うか（自動生成の公平分配・夜勤翌日ルールの対象判定に使う）
+  isNightShift: z.boolean().default(false),
+  isActive: z.boolean().default(true),
 });
 
 const shiftTypeUpdateSchema = shiftTypeSchema.partial().extend({

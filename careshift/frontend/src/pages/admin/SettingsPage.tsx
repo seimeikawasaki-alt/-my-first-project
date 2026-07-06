@@ -11,6 +11,8 @@ const EMPTY_FORM = {
   breakMinutes: 60,
   color: '#2563EB',
   isOvernight: false,
+  isNightShift: false,
+  isActive: true,
 };
 
 export default function SettingsPage() {
@@ -51,6 +53,8 @@ export default function SettingsPage() {
       breakMinutes: st.breakMinutes,
       color: st.color ?? '#2563EB',
       isOvernight: st.isOvernight,
+      isNightShift: st.isNightShift,
+      isActive: st.isActive,
     });
     setError('');
     setModalOpen(true);
@@ -117,6 +121,7 @@ export default function SettingsPage() {
                   <th className="pb-3 pr-4">終了</th>
                   <th className="pb-3 pr-4">休憩(分)</th>
                   <th className="pb-3 pr-4">深夜跨ぎ</th>
+                  <th className="pb-3 pr-4">夜勤対象</th>
                   <th className="pb-3 pr-4">状態</th>
                   <th className="pb-3"></th>
                 </tr>
@@ -135,6 +140,11 @@ export default function SettingsPage() {
                     <td className="py-3 pr-4">{st.endTime}</td>
                     <td className="py-3 pr-4">{st.breakMinutes}</td>
                     <td className="py-3 pr-4">{st.isOvernight ? '✓' : '—'}</td>
+                    <td className="py-3 pr-4">
+                      {st.isNightShift
+                        ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">夜勤</span>
+                        : <span className="text-subtext">—</span>}
+                    </td>
                     <td className="py-3 pr-4">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.isActive ? 'bg-green-100 text-success' : 'bg-gray-100 text-subtext'}`}>
                         {st.isActive ? '有効' : '無効'}
@@ -212,7 +222,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="space-y-3">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -221,6 +231,15 @@ export default function SettingsPage() {
                 className="w-4 h-4"
               />
               <span className="text-sub text-text">深夜跨ぎ（翌日終了）</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.isNightShift}
+                onChange={e => setForm(f => ({ ...f, isNightShift: e.target.checked }))}
+                className="w-4 h-4"
+              />
+              <span className="text-sub text-text">夜勤として扱う（公平分配・夜勤翌日ルールの対象にする）</span>
             </label>
           </div>
 

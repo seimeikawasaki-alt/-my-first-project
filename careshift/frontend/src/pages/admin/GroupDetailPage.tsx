@@ -7,7 +7,7 @@ import { getShiftRequirements, bulkUpsertShiftRequirements } from '../../api/shi
 import { getGroupShiftConfig, upsertGroupShiftConfig } from '../../api/groupShiftConfig';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { matchStaff, compareKana } from '../../utils/staffSort';
-import type { Group, ShiftType, ShiftRequirement, GroupShiftConfig, User } from '../../types';
+import type { Group, ShiftType, ShiftRequirement, User } from '../../types';
 
 const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
 const PRESET_COLORS = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6B7280'];
@@ -22,7 +22,6 @@ export default function GroupDetailPage() {
   const [group, setGroup] = useState<Group | null>(null);
   const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([]);
   const [requirements, setRequirements] = useState<ShiftRequirement[]>([]);
-  const [config, setConfig] = useState<GroupShiftConfig | null>(null);
   const [allStaff, setAllStaff] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('info');
@@ -72,7 +71,6 @@ export default function GroupDetailPage() {
       }
       setShiftTypes(typesRes.data.filter((t: ShiftType) => t.isActive));
       setRequirements(reqRes.data);
-      setConfig(configRes);
       if (configRes) {
         setRuleForm({
           maxConsecutive: configRes.maxConsecutive != null ? String(configRes.maxConsecutive) : '',
