@@ -125,7 +125,6 @@ export async function generateShifts(params: {
   const globalMaxConsecutive = ruleMap['MAX_CONSECUTIVE_WORK_DAYS'] ?? 5;
   const globalMaxNight = ruleMap['MAX_NIGHT_SHIFTS_PER_MONTH'] ?? 8;
   const maxConsecutiveNight = ruleMap['MAX_CONSECUTIVE_NIGHT'] ?? 2;
-  const minSkilledPerShift = ruleMap['MIN_SKILLED_PER_SHIFT'] ?? 1;
   const minRestAfterNight = ruleMap['MIN_REST_AFTER_NIGHT'] ?? 16;
   const minWorkDaysPerMonth = ruleMap['MIN_WORK_DAYS_PER_MONTH'] ?? 0;
 
@@ -434,7 +433,6 @@ export async function generateShifts(params: {
           return a.tie - b.tie;
         });
 
-        const skillLevels = new Set(['SENIOR', 'LEADER']);
         const assigned: StaffState[] = [];
 
         for (const staff of sorted) {
@@ -444,13 +442,6 @@ export async function generateShifts(params: {
             if (othersAvail === 0) continue;
           }
           assigned.push(staff);
-        }
-
-        // Skill shortage warning (only for shifts that need 2+ staff; a solo shift
-        // doesn't require a dedicated senior, which otherwise floods the warnings)
-        const assignedSkilled = assigned.filter(s => skillLevels.has(s.skillLevel)).length;
-        if (minSkilledPerShift && required >= 2 && assigned.length > 0 && assignedSkilled < minSkilledPerShift) {
-          warnings.push({ type: 'SKILL_SHORTAGE', date: dk, shiftTypeName: shiftType.name, message: `${dk} ${shiftType.name}: 有資格者が不足しています`, severity: 'MEDIUM' });
         }
 
         const filled = assigned.length + existingInSlot;
