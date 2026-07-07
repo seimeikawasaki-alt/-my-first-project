@@ -59,6 +59,8 @@ interface StaffState {
   consecutiveNights: number;
   lastNightDate: string | null;
   assignedDates: Set<string>;
+  // 同点候補をランダムに選ぶための一時的な乱数値（枠ごとに振り直す）
+  tie: number;
 }
 
 type RequirementRow = { shiftTypeId: string; dayOfWeek: number | null; requiredStaff: number; groupId: string | null };
@@ -69,14 +71,33 @@ function isNightShiftType(st: { isOvernight: boolean; isNightShift?: boolean }):
   return ns != null ? ns : st.isOvernight;
 }
 
+/**
+ * 決定的な擬似乱数（mulberry32）。同じ seed なら同じ結果を再現でき、
+ * seed を変える（既定では毎回変わる）と別パターンになる。
+ * ハードルール・公平分配は維持したまま、「同点候補」の選択にだけ使う。
+ */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export async function generateShifts(params: {
   year: number;
   month: number;
   groupId?: string;
   overwrite?: boolean;
   adminUserId: string;
+  /** 乱数シード。省略時は毎回変わる（＝毎回違うパターン）。指定すると同じ結果を再現できる。 */
+  seed?: number;
 }): Promise<GenerationResult> {
   const { year, month, groupId, overwrite = false, adminUserId } = params;
+  // シードが未指定なら現在時刻から生成 → 実行のたびに別パターンになる
+  const rng = mulberry32(params.seed ?? (Date.now() ^ (Math.random() * 0x100000000)) >>> 0);
 
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEnd = new Date(Date.UTC(year, month, 1));
@@ -304,6 +325,7 @@ export async function generateShifts(params: {
         consecutiveNights: 0,
         lastNightDate: null,
         assignedDates: new Set(),
+        tie: 0,
       };
 
       // ---- 前月末からの継続（月またぎ）を初期状態に反映 ----
@@ -376,7 +398,10 @@ export async function generateShifts(params: {
           return true;
         });
 
-        // Sort: preferred request → below minimum days → fair distribution → skill → fewest work days
+        // 同点候補をランダムに選ぶため、この枠だけの乱数値を各候補に振り直す
+        for (const staff of eligible) staff.tie = rng();
+
+        // Sort: preferred request → below minimum days → fair distribution → skill → fewest work days → ランダム
         const sorted = [...eligible].sort((a, b) => {
           const aPref = preferredMap.get(a.id)?.get(dk) === shiftTypeId ? 0 : 1;
           const bPref = preferredMap.get(b.id)?.get(dk) === shiftTypeId ? 0 : 1;
@@ -403,7 +428,10 @@ export async function generateShifts(params: {
             const diff = order.indexOf(a.skillLevel) - order.indexOf(b.skillLevel);
             if (diff !== 0) return diff;
           }
-          return a.workDays - b.workDays;
+          // ここまでの条件（ハードルール・公平分配・スキル）で並べたうえで、
+          // 勤務日数が同じ＝同点の候補は乱数で選ぶ → 毎回違う結果になる
+          if (a.workDays !== b.workDays) return a.workDays - b.workDays;
+          return a.tie - b.tie;
         });
 
         const skillLevels = new Set(['SENIOR', 'LEADER']);
