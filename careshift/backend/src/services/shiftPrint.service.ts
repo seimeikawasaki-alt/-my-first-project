@@ -30,7 +30,7 @@ export async function buildShiftPrintHtml(opts: PrintOptions): Promise<string> {
   let groupName = '全スタッフ';
   if (groupId) {
     const [group, members] = await Promise.all([
-      prisma.group.findUnique({ where: { id: groupId } }),
+      prisma.unit.findUnique({ where: { id: groupId } }),
       prisma.userGroup.findMany({ where: { groupId }, select: { userId: true } }),
     ]);
     groupName = group?.name ?? 'グループ';

@@ -106,7 +106,7 @@ router.get('/', authenticate, authorize('ADMIN'), async (req: Request, res: Resp
   const userGroupLinks = await prisma.userGroup.findMany({
     where: { userId: { in: fetchedUserIds } },
   });
-  const groupData = await prisma.group.findMany({
+  const groupData = await prisma.unit.findMany({
     where: { id: { in: userGroupLinks.map(ug => ug.groupId) } },
   });
 
@@ -157,7 +157,7 @@ router.get('/:id', authenticate, authorize('ADMIN'), async (req: Request, res: R
     where: { userId: user.id },
   });
 
-  const groupIds = await prisma.group.findMany({
+  const groupIds = await prisma.unit.findMany({
     where: { id: { in: userGroups.map(ug => ug.groupId) } },
   });
 

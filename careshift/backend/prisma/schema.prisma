@@ -7,8 +7,74 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ---- Phase A-1: マルチテナント3階層(設計書§1.1・§2.2・§9) ----------------
+//
+// Tenant(法人) > Office(事業所) > Unit(旧Group) > StaffAssignment(所属)
+//
+// tenantId の @default("tenant-default") は A-1→A-2 間の暫定ブリッジ。
+// A-2 で Prisma Client Extension がリクエストコンテキストの tenantId を
+// 全クエリ・全createに注入するようになった時点で、この default への依存を
+// なくす(削除 or 安全網として残すかは A-2 で判断)。
+// 既定テナント/事業所の固定ID: 'tenant-default' / 'office-default'
+// (バックフィル prisma/backfill/a1-tenant-backfill.ts と seed が共有)
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String // 法人名
+  plan      String   @default("STANDARD") // 課金プラン(将来拡張)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 指定サービス種別(特養/老健/GH/通所介護/有料 等)。設計書§2.2
+model ServiceType {
+  id            String @id @default(uuid())
+  code          String @unique // 例: "TOKUYO", "DAYCARE"
+  name          String
+  insuranceKind String @default("KAIGO") // KAIGO(介護保険) / SHOGAI(障害福祉)
+}
+
+model Office {
+  id                  String   @id @default(uuid())
+  tenantId            String   @default("tenant-default")
+  name                String // 旧 FACILITY_NAME 環境変数から移行(設計書§1.1)
+  serviceTypeId       String
+  capacity            Int      @default(50) // 定員
+  avgUsers            Int? // 前年度平均利用者数(配置基準の分母。設計書§2.2)
+  fullTimeWeeklyHours Int      @default(40) // 常勤の週所定労働時間(下限32)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// 職員の所属・職種・常勤区分。複数事業所兼務は複数行で表現(設計書§1.1・§2.1)
+model StaffAssignment {
+  id                  String   @id @default(uuid())
+  tenantId            String   @default("tenant-default")
+  userId              String
+  officeId            String
+  // 職種コード: CARE_WORKER(介護職員) / NURSE(看護職員) / LIFE_CONSULTANT(生活相談員) /
+  // FUNCTIONAL_TRAINER(機能訓練指導員) / CARE_MANAGER(介護支援専門員) /
+  // MANAGER(管理者) / SERVICE_PROVIDER(サービス提供責任者) / OTHER
+  jobCategory         String   @default("CARE_WORKER")
+  employmentType      String   @default("FULL_TIME") // FULL_TIME(常勤) / PART_TIME(非常勤)
+  weeklyContractHours Int      @default(40) // 週契約時間(常勤換算の按分に使用)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, officeId])
+  @@index([tenantId])
+  @@index([officeId])
+}
+
+// ---------------------------------------------------------------------------
+
 model User {
   id               String    @id @default(uuid())
+  tenantId         String    @default("tenant-default")
   userCode         String    @unique
   passwordHash     String
   role             String    @default("STAFF")
@@ -25,21 +91,30 @@ model User {
   isActive         Boolean   @default(true)
   failedLoginCount Int       @default(0)
   lockedUntil      DateTime?
-  retiredAt        DateTime? // 退職日（論理削除。労基法の記録保存義務のため物理削除しない）
-  dataRetentionUntil DateTime? // データ保存期限（退職日 + 5年）
+  retiredAt        DateTime? // 退職日(論理削除。労基法の記録保存義務のため物理削除しない)
+  dataRetentionUntil DateTime? // データ保存期限(退職日 + 5年)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+
+  @@index([tenantId])
 }
 
-model Group {
+// 旧 Group。Office 配下のユニット/フロア(設計書§1.1・§9)
+model Unit {
   id          String   @id @default(uuid())
+  tenantId    String   @default("tenant-default")
+  officeId    String? // A-1では nullable(バックフィルで充当)。NOT NULL化はA-2で
   name        String
   color       String?
   description String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([officeId])
 }
 
+// Unit(旧Group)への所属。groupId は unitId を指す(互換のため名称維持)
 model UserGroup {
   userId   String
   groupId  String
@@ -51,6 +126,7 @@ model UserGroup {
 
 model ShiftType {
   id           String  @id @default(uuid())
+  tenantId     String  @default("tenant-default")
   name         String
   startTime    String
   endTime      String
@@ -59,10 +135,13 @@ model ShiftType {
   isOvernight  Boolean @default(false)
   isNightShift Boolean @default(false)
   isActive     Boolean @default(true)
+
+  @@index([tenantId])
 }
 
 model Shift {
   id          String   @id @default(uuid())
+  tenantId    String   @default("tenant-default")
   userId      String
   shiftTypeId String?
   shiftDate   DateTime
@@ -76,10 +155,12 @@ model Shift {
 
   @@index([userId, shiftDate])
   @@index([shiftDate, status])
+  @@index([tenantId])
 }
 
 model Attendance {
   id               String    @id @default(uuid())
+  tenantId         String    @default("tenant-default")
   userId           String
   workDate         DateTime
   punchIn          DateTime?
@@ -102,10 +183,12 @@ model Attendance {
 
   @@index([userId, workDate])
   @@index([workDate])
+  @@index([tenantId])
 }
 
 model SalaryItem {
   id          String   @id @default(uuid())
+  tenantId    String   @default("tenant-default")
   code        String?  @unique
   name        String
   itemType    String
@@ -115,10 +198,13 @@ model SalaryItem {
   sortOrder   Int      @default(0)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 model Payroll {
   id             String    @id @default(uuid())
+  tenantId       String    @default("tenant-default")
   userId         String
   year           Int
   month          Int
@@ -139,19 +225,24 @@ model Payroll {
 
   @@unique([userId, year, month])
   @@index([year, month])
+  @@index([tenantId])
 }
 
 model PayrollDetail {
   id           String  @id @default(uuid())
+  tenantId     String  @default("tenant-default")
   payrollId    String
   salaryItemId String
   amount       Decimal @default(0)
   notes        String?
   sortOrder    Int     @default(0)
+
+  @@index([tenantId])
 }
 
 model ShiftRequest {
   id          String    @id @default(uuid())
+  tenantId    String    @default("tenant-default")
   userId      String
   requestType String
   targetDate  DateTime?
@@ -162,30 +253,39 @@ model ShiftRequest {
   reviewedBy  String?
   reviewedAt  DateTime?
   createdAt   DateTime  @default(now())
+
+  @@index([tenantId])
 }
 
 model ShiftRequirement {
   id            String   @id @default(uuid())
+  tenantId      String   @default("tenant-default")
   shiftTypeId   String
   dayOfWeek     Int?
   dateType      String   @default("ALL")
   requiredStaff Int      @default(1)
-  groupId       String?
+  groupId       String? // unitId を指す(互換のため名称維持)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 model ShiftRule {
   id          String   @id @default(uuid())
-  ruleType    String   @unique
+  tenantId    String   @default("tenant-default")
+  ruleType    String   @unique // A-2で @@unique([tenantId, ruleType]) へ移行予定
   value       Int
   description String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 model StaffConstraint {
   id                  String   @id @default(uuid())
+  tenantId            String   @default("tenant-default")
   userId              String   @unique
   maxWorkDaysPerMonth Int?
   maxNightShifts      Int?
@@ -199,33 +299,42 @@ model StaffConstraint {
   notPairWithUserId   String?
   notes               String?
   updatedAt           DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 model ShiftGenerationLog {
   id            String   @id @default(uuid())
+  tenantId      String   @default("tenant-default")
   year          Int
   month         Int
-  groupId       String?
+  groupId       String? // unitId を指す(互換のため名称維持)
   status        String
   fulfilledRate Float
   warnings      String?
   generatedBy   String
   createdAt     DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 model GroupShiftConfig {
   id                      String   @id @default(uuid())
-  groupId                 String   @unique
+  tenantId                String   @default("tenant-default")
+  groupId                 String   @unique // unitId を指す(互換のため名称維持)
   maxConsecutive          Int?
   maxNightPerMonth        Int?
   enableFairDistribution  Boolean  @default(true)
   fairDistributionTarget  String   @default("ALL")
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 model StaffShiftStats {
   id           String   @id @default(uuid())
+  tenantId     String   @default("tenant-default")
   userId       String
   year         Int
   month        Int
@@ -238,12 +347,14 @@ model StaffShiftStats {
   updatedAt    DateTime @updatedAt
 
   @@unique([userId, year, month])
+  @@index([tenantId])
 }
 
 // ---- Phase 5: 有給休暇 / 36協定 / シフト交代 / 監査ログ ----
 
 model PaidLeaveGrant {
   id            String   @id @default(uuid())
+  tenantId      String   @default("tenant-default")
   userId        String
   grantDate     DateTime
   grantedDays   Float
@@ -256,10 +367,12 @@ model PaidLeaveGrant {
 
   @@index([userId])
   @@index([userId, fiscalYear])
+  @@index([tenantId])
 }
 
 model PaidLeaveUsage {
   id           String   @id @default(uuid())
+  tenantId     String   @default("tenant-default")
   userId       String
   grantId      String
   usedDate     DateTime
@@ -272,20 +385,25 @@ model PaidLeaveUsage {
   createdAt    DateTime @default(now())
 
   @@index([userId])
+  @@index([tenantId])
 }
 
 model OvertimeLimitConfig {
   id                   String   @id @default(uuid())
+  tenantId             String   @default("tenant-default")
   monthlyLimitHours    Int      @default(45)
   yearlyLimitHours     Int      @default(360)
   specialMonthlyLimit  Int      @default(100)
   specialYearlyLimit   Int      @default(720)
   warningThresholdRate Float    @default(0.8)
   updatedAt            DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 model OvertimeMonthlyStats {
   id            String   @id @default(uuid())
+  tenantId      String   @default("tenant-default")
   userId        String
   year          Int
   month         Int
@@ -295,10 +413,12 @@ model OvertimeMonthlyStats {
   updatedAt     DateTime @updatedAt
 
   @@unique([userId, year, month])
+  @@index([tenantId])
 }
 
 model ShiftSwapRequest {
   id                String    @id @default(uuid())
+  tenantId          String    @default("tenant-default")
   originalUserId    String
   shiftId           String
   reason            String
@@ -312,10 +432,12 @@ model ShiftSwapRequest {
 
   @@index([status])
   @@index([originalUserId])
+  @@index([tenantId])
 }
 
 model ShiftSwapResponse {
   id            String   @id @default(uuid())
+  tenantId      String   @default("tenant-default")
   swapRequestId String
   userId        String
   status        String   @default("PENDING")
@@ -323,10 +445,12 @@ model ShiftSwapResponse {
 
   @@index([swapRequestId])
   @@index([userId])
+  @@index([tenantId])
 }
 
 model AuditLog {
   id          String   @id @default(uuid())
+  tenantId    String   @default("tenant-default")
   userId      String
   action      String
   targetType  String?
@@ -340,6 +464,7 @@ model AuditLog {
   @@index([userId])
   @@index([action])
   @@index([createdAt])
+  @@index([tenantId])
 }
 
 // ---- Phase 6: 資格・研修管理 / 給与振込 / 入退社ワークフロー ----
@@ -347,22 +472,26 @@ model AuditLog {
 // 資格・研修マスタ
 model Qualification {
   id          String   @id @default(uuid())
+  tenantId    String   @default("tenant-default")
   name        String
   category    String   @default("QUALIFICATION") // QUALIFICATION(資格) / TRAINING(研修)
   hasExpiry   Boolean  @default(true)
-  validMonths Int? // 有効期間（月）。取得日から自動計算する場合に使用
+  validMonths Int? // 有効期間(月)。取得日から自動計算する場合に使用
   description String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 // スタッフ個別の資格・研修取得記録
 model StaffQualification {
   id              String    @id @default(uuid())
+  tenantId        String    @default("tenant-default")
   userId          String
   qualificationId String
   acquiredDate    DateTime
-  expiryDate      DateTime? // 有効期限（なしの資格は null）
+  expiryDate      DateTime? // 有効期限(なしの資格は null)
   certificateNo   String?
   notes           String?
   createdAt       DateTime  @default(now())
@@ -371,26 +500,31 @@ model StaffQualification {
   @@index([userId])
   @@index([qualificationId])
   @@index([expiryDate])
+  @@index([tenantId])
 }
 
-// スタッフの振込先口座（全銀協フォーマット生成に使用）
+// スタッフの振込先口座(全銀協フォーマット生成に使用)
 model StaffBankAccount {
   id            String   @id @default(uuid())
+  tenantId      String   @default("tenant-default")
   userId        String   @unique
-  bankCode      String // 銀行コード（4桁）
-  bankName      String // 銀行名（半角カナ）
-  branchCode    String // 支店コード（3桁）
-  branchName    String // 支店名（半角カナ）
+  bankCode      String // 銀行コード(4桁)
+  bankName      String // 銀行名(半角カナ)
+  branchCode    String // 支店コード(3桁)
+  branchName    String // 支店名(半角カナ)
   accountType   String   @default("ORDINARY") // ORDINARY(普通=1) / CHECKING(当座=2)
-  accountNumber String // 口座番号（7桁）
-  accountHolder String // 口座名義（半角カナ）
+  accountNumber String // 口座番号(7桁)
+  accountHolder String // 口座名義(半角カナ)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
-// 給与振込バッチ（全銀協フォーマット生成履歴）
+// 給与振込バッチ(全銀協フォーマット生成履歴)
 model PayrollTransferBatch {
   id           String   @id @default(uuid())
+  tenantId     String   @default("tenant-default")
   year         Int
   month        Int
   transferDate DateTime // 振込指定日
@@ -398,17 +532,19 @@ model PayrollTransferBatch {
   totalAmount  Decimal  @default(0) // 合計金額
   status       String   @default("GENERATED") // GENERATED / EXPORTED
   fileName     String?
-  content      String? // 生成済み全銀協テキスト（再ダウンロード用）
+  content      String? // 生成済み全銀協テキスト(再ダウンロード用)
   missingCount Int      @default(0) // 口座未登録により除外した人数
   createdBy    String
   createdAt    DateTime @default(now())
 
   @@index([year, month])
+  @@index([tenantId])
 }
 
 // 入退社ライフサイクルイベント
 model StaffLifecycleEvent {
   id        String   @id @default(uuid())
+  tenantId  String   @default("tenant-default")
   userId    String
   eventType String // ONBOARDING(入社) / OFFBOARDING(退職)
   eventDate DateTime
@@ -418,11 +554,13 @@ model StaffLifecycleEvent {
 
   @@index([userId])
   @@index([eventType])
+  @@index([tenantId])
 }
 
 // 退職手続きチェックリスト
 model OffboardingChecklist {
   id        String    @id @default(uuid())
+  tenantId  String    @default("tenant-default")
   userId    String
   itemKey   String // RETURN_UNIFORM / RETURN_KEY / RETURN_ID_CARD / INSURANCE / SETTLE_PAYROLL ...
   label     String
@@ -431,4 +569,5 @@ model OffboardingChecklist {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+  @@index([tenantId])
 }

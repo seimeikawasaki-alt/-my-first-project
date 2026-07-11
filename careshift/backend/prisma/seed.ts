@@ -4,6 +4,21 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+// ---- Phase A-1: テナント3階層の既定値(設計書§1.1) ----
+// 固定IDは backfill(prisma/backfill/a1-tenant-backfill.ts)・schema の
+// @default("tenant-default") と共有している。変更する場合は3箇所同時に。
+const TENANT_ID = 'tenant-default';
+const OFFICE_ID = 'office-default';
+
+// 指定サービス種別マスタ(設計書§2.2。TOKUYO等5種)
+const SERVICE_TYPES = [
+  { id: 'svc-tokuyo', code: 'TOKUYO', name: '特別養護老人ホーム', insuranceKind: 'KAIGO' },
+  { id: 'svc-roken', code: 'ROKEN', name: '介護老人保健施設', insuranceKind: 'KAIGO' },
+  { id: 'svc-gh', code: 'GH', name: '認知症対応型共同生活介護(グループホーム)', insuranceKind: 'KAIGO' },
+  { id: 'svc-daycare', code: 'DAYCARE', name: '通所介護(デイサービス)', insuranceKind: 'KAIGO' },
+  { id: 'svc-yuryo', code: 'YURYO', name: '有料老人ホーム(特定施設)', insuranceKind: 'KAIGO' },
+];
+
 const GROUPS = [
   { id: 'group-1fa', name: '1F Aチーム', color: '#2563EB', description: '1階Aチームのスタッフグループ' },
   { id: 'group-1fb', name: '1F Bチーム', color: '#10B981', description: '1階Bチームのスタッフグループ' },
@@ -84,6 +99,35 @@ function getEmploymentType(indexInGroup: number): string {
 async function main() {
   console.log('Seeding database...');
 
+  // ---- Phase A-1: Tenant / ServiceType / Office(旧FACILITY_NAME) ----
+  await prisma.tenant.upsert({
+    where: { id: TENANT_ID },
+    update: { name: '既定法人', isActive: true },
+    create: { id: TENANT_ID, name: '既定法人', plan: 'STANDARD', isActive: true },
+  });
+  for (const st of SERVICE_TYPES) {
+    await prisma.serviceType.upsert({
+      where: { code: st.code },
+      update: { name: st.name, insuranceKind: st.insuranceKind },
+      create: st,
+    });
+  }
+  const officeName = process.env.FACILITY_NAME || '既定事業所';
+  await prisma.office.upsert({
+    where: { id: OFFICE_ID },
+    update: { name: officeName, isActive: true },
+    create: {
+      id: OFFICE_ID,
+      tenantId: TENANT_ID,
+      name: officeName,
+      serviceTypeId: 'svc-tokuyo',
+      capacity: 50,
+      avgUsers: 45,
+      fullTimeWeeklyHours: 40,
+    },
+  });
+  console.log(`Tenant/Office created: 既定法人 / ${officeName} (ServiceType x${SERVICE_TYPES.length})`);
+
   // Reset all group memberships so each staff belongs to exactly one group
   // (removes stale/duplicate memberships from earlier seeds or manual edits that
   //  otherwise cause a staff to be generated in several groups → over-work)
@@ -92,14 +136,14 @@ async function main() {
   // Upsert groups
   const groupIds = GROUPS.map(g => g.id);
   for (const g of GROUPS) {
-    await prisma.group.upsert({
+    await prisma.unit.upsert({
       where: { id: g.id },
-      update: { name: g.name, color: g.color, description: g.description, isActive: true },
-      create: { id: g.id, name: g.name, color: g.color, description: g.description, isActive: true },
+      update: { name: g.name, color: g.color, description: g.description, isActive: true, officeId: OFFICE_ID },
+      create: { id: g.id, name: g.name, color: g.color, description: g.description, isActive: true, officeId: OFFICE_ID },
     });
   }
   // Remove groups left over from previous seeds so generation only targets these 5
-  await prisma.group.deleteMany({ where: { id: { notIn: groupIds } } });
+  await prisma.unit.deleteMany({ where: { id: { notIn: groupIds } } });
   console.log('Groups created:', GROUPS.map(g => g.name).join(', '));
 
   const saltRounds = 12;
@@ -125,6 +169,11 @@ async function main() {
       hireDate: new Date('2020-04-01'),
       isActive: true,
     },
+  });
+  await prisma.staffAssignment.upsert({
+    where: { userId_officeId: { userId: 'user-admin', officeId: OFFICE_ID } },
+    update: {},
+    create: { userId: 'user-admin', officeId: OFFICE_ID, jobCategory: 'MANAGER', employmentType: 'FULL_TIME', weeklyContractHours: 40 },
   });
   console.log('Admin created: admin');
 
@@ -194,10 +243,25 @@ async function main() {
       },
     });
 
+    // 所属(StaffAssignment) — 既定事業所へ配属。職種は仮置きCARE_WORKER(A-1)。
+    // 常勤区分: 月給制=FULL_TIME / 時給制=PART_TIME(バックフィルと同じ規則)
+    const assignEmployment = empType === 'FULL_TIME' ? 'FULL_TIME' : 'PART_TIME';
+    await prisma.staffAssignment.upsert({
+      where: { userId_officeId: { userId, officeId: OFFICE_ID } },
+      update: { employmentType: assignEmployment, weeklyContractHours: assignEmployment === 'FULL_TIME' ? 40 : 24 },
+      create: {
+        userId,
+        officeId: OFFICE_ID,
+        jobCategory: 'CARE_WORKER',
+        employmentType: assignEmployment,
+        weeklyContractHours: assignEmployment === 'FULL_TIME' ? 40 : 24,
+      },
+    });
+
     staffIds.push(userId);
   }
 
-  console.log(`Created ${staffIds.length} staff members`);
+  console.log(`Created ${staffIds.length} staff members (+StaffAssignment)`);
 
   // Salary items — 11 default items (Phase 3 spec)
   // calcType: AUTO (engine-calculated via `code`), MANUAL (admin input), FIXED, HOURLY

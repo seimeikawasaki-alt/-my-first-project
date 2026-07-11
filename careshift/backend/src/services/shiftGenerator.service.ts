@@ -137,7 +137,7 @@ export async function generateShifts(params: {
   // Determine target groups: a single group, or every group (Plan A: per-group generation)
   const targetGroupIds = groupId
     ? [groupId]
-    : (await prisma.group.findMany({ select: { id: true } })).map((g: { id: string }) => g.id);
+    : (await prisma.unit.findMany({ select: { id: true } })).map((g: { id: string }) => g.id);
 
   console.log(`[generateShifts] year=${year} month=${month} groups=[${targetGroupIds.join(',')}] overwrite=${overwrite} nightShiftIds=[${[...nightShiftIds].join(',')}] minRestAfterNight=${minRestAfterNight}h`);
 

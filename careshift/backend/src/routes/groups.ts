@@ -15,7 +15,7 @@ const groupSchema = z.object({
 
 // GET /api/v1/groups
 router.get('/', authenticate, async (req: Request, res: Response): Promise<void> => {
-  const groups = await prisma.group.findMany({
+  const groups = await prisma.unit.findMany({
     where: { isActive: true },
     orderBy: { name: 'asc' },
   });
@@ -60,7 +60,7 @@ router.post('/', authenticate, authorize('ADMIN'), async (req: Request, res: Res
     return;
   }
 
-  const group = await prisma.group.create({
+  const group = await prisma.unit.create({
     data: parsed.data,
   });
 
@@ -77,13 +77,13 @@ router.put('/:id', authenticate, authorize('ADMIN'), async (req: Request, res: R
     return;
   }
 
-  const existing = await prisma.group.findUnique({ where: { id: req.params.id } });
+  const existing = await prisma.unit.findUnique({ where: { id: req.params.id } });
   if (!existing) {
     sendError(res, 404, 'NOT_FOUND', 'グループが見つかりません');
     return;
   }
 
-  const group = await prisma.group.update({
+  const group = await prisma.unit.update({
     where: { id: req.params.id },
     data: parsed.data,
   });
@@ -93,13 +93,13 @@ router.put('/:id', authenticate, authorize('ADMIN'), async (req: Request, res: R
 
 // DELETE /api/v1/groups/:id
 router.delete('/:id', authenticate, authorize('ADMIN'), async (req: Request, res: Response): Promise<void> => {
-  const existing = await prisma.group.findUnique({ where: { id: req.params.id } });
+  const existing = await prisma.unit.findUnique({ where: { id: req.params.id } });
   if (!existing) {
     sendError(res, 404, 'NOT_FOUND', 'グループが見つかりません');
     return;
   }
 
-  await prisma.group.update({
+  await prisma.unit.update({
     where: { id: req.params.id },
     data: { isActive: false },
   });
@@ -122,7 +122,7 @@ router.post('/:id/members', authenticate, authorize('ADMIN'), async (req: Reques
     return;
   }
 
-  const group = await prisma.group.findUnique({ where: { id: req.params.id } });
+  const group = await prisma.unit.findUnique({ where: { id: req.params.id } });
   if (!group) {
     sendError(res, 404, 'NOT_FOUND', 'グループが見つかりません');
     return;
@@ -190,7 +190,7 @@ router.put('/:id/shift-config', authenticate, authorize('ADMIN'), async (req: Re
     return;
   }
 
-  const group = await prisma.group.findUnique({ where: { id: req.params.id } });
+  const group = await prisma.unit.findUnique({ where: { id: req.params.id } });
   if (!group) {
     sendError(res, 404, 'NOT_FOUND', 'グループが見つかりません');
     return;
